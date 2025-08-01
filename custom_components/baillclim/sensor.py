@@ -91,7 +91,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     thermostats = coordinator.data.get("data", {}).get("thermostats", [])
     for th in thermostats:
         tid = th.get("id")
-        if 500 <= tid <= 515:
+        if XXXXXX <= tid <= XXXXXXXX:  #<<<<<<<<<<<<<<<<<<<<<<<<<<< A MODIFIER AVEC VOTRE ID
             name = th.get("name", f"Thermostat {tid}")
             temp = th.get("temperature")
             is_on = th.get("is_on", None)
