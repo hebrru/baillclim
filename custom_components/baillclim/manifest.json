@@ -1,14 +1,9 @@
 {
   "domain": "baillclim",
-  "name": "BaillConnect",
+  "name": "BaillClim",
   "version": "4.0.0",
-  "config_flow": true,
-  "documentation": "https://www.example.com",
-  "requirements": [],
+  "documentation": "https://github.com/hebrru/baillclim",
   "dependencies": [],
-  "codeowners": [
-    "@herbru"
-  ],
-  "iot_class": "cloud_polling",
-  "logo": "custom_components/baillclim/icon.png"
+  "codeowners": ["@hebrru"],
+  "requirements": []
 }

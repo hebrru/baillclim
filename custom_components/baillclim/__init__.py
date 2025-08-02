@@ -1,33 +1,42 @@
+"""BaillClim - Intégration BaillConnect pour Home Assistant."""
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-import asyncio
 
-from .const import DOMAIN
-from .coordinator import create_baillclim_coordinator
+DOMAIN = "baillclim"
+
 
 async def async_setup(hass: HomeAssistant, config: dict):
+    """Set up BaillClim from configuration.yaml (non utilisé, mais requis)."""
     return True
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up BaillClim from a config entry."""
     hass.data.setdefault(DOMAIN, {})
-    coordinator = create_baillclim_coordinator(hass, entry.data["email"], entry.data["password"])
-    await coordinator.async_config_entry_first_refresh()
-    hass.data[DOMAIN][entry.entry_id] = entry.data
-    hass.data[DOMAIN][entry.entry_id + "_coordinator"] = coordinator
-
+    
     await hass.config_entries.async_forward_entry_setups(entry, [
-        "sensor", "climate", "switch", "number", "select"
+        "sensor",
+        "climate",
+        "switch",
+        "number",
+        "select",
     ])
+
     return True
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
-    unload_ok = all(
-        await asyncio.gather(*[
-            hass.config_entries.async_forward_entry_unload(entry, platform)
-            for platform in ["sensor", "climate", "switch", "number", "select"]
-        ])
-    )
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
-        hass.data[DOMAIN].pop(entry.entry_id + "_coordinator", None)
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry."""
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, [
+        "sensor",
+        "climate",
+        "switch",
+        "number",
+        "select",
+    ])
+
+    if unload_ok and DOMAIN in hass.data:
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+
     return unload_ok
