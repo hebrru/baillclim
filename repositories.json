@@ -1,11 +1,5 @@
 {
   "name": "BaillClim",
-  "content_in_root": false,
-  "country": "FR",
-  "domain": "baillclim",
-  "zip_release": false,
-  "filename": "custom_components/baillclim/manifest.json",
-  "render_readme": true,
-  "homeassistant": "2023.0.0",
-  "iot_class": "cloud_polling"
+  "url": "https://github.com/hebrru/baillclim",
+  "category": "integration"
 }
