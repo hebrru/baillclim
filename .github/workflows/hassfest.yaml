@@ -3,7 +3,7 @@ name: Hassfest
 on:
   push:
     branches:
-      - hacs_submission
+      - main  
   pull_request:
 
 jobs:
