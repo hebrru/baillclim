@@ -1,14 +1,13 @@
 import logging
 import re
 import aiohttp
-import asyncio
+from datetime import timedelta
 
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from datetime import timedelta
 
 from .const import DOMAIN, LOGIN_URL, REGULATIONS_URL, COMMAND_URL
 
@@ -16,14 +15,6 @@ _LOGGER = logging.getLogger(__name__)
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0"
-}
-
-MODES = {
-    0: "Arrêt",
-    1: "Froid",
-    2: "Chauffage",
-    3: "Désumidificateur",
-    4: "Ventilation"
 }
 
 
@@ -83,41 +74,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     await coordinator.async_config_entry_first_refresh()
 
-    entities = [
-        ModeClimSensor(coordinator, coordinator.data.get("data", {}).get("uc_mode", -1)),
-        DebugBaillclimSensor(coordinator)
-    ]
+    entities = [DebugBaillclimSensor(coordinator)]
 
     thermostats = coordinator.data.get("data", {}).get("thermostats", [])
     for th in thermostats:
         tid = th.get("id")
-        if XXXXXX <= tid <= XXXXXXXX:  #<<<<<<<<<<<<<<<<<<<<<<<<<<< A MODIFIER AVEC VOTRE ID
-            name = th.get("name", f"Thermostat {tid}")
-            temp = th.get("temperature")
-            is_on = th.get("is_on", None)
-
-            if temp is not None:
-                entities.append(ThermostatTemperatureSensor(coordinator, tid, name, temp))
-            if is_on is not None:
-                entities.append(ThermostatOnOffSensor(coordinator, tid, name))
+        name = th.get("name", f"Thermostat {tid}")
+        if tid is not None and "temperature" in th:
+            entities.append(ThermostatTemperatureSensor(coordinator, tid, name.strip()))
 
     async_add_entities(entities)
-
-
-class ModeClimSensor(CoordinatorEntity, Entity):
-    def __init__(self, coordinator, uc_mode):
-        super().__init__(coordinator)
-        self._attr_name = "Mode Clim Réel"
-        self._attr_unique_id = "baillclim_mode"
-        self._state = MODES.get(uc_mode, "Inconnu")
-
-    @property
-    def state(self):
-        data = self.coordinator.data
-        if not data:
-            return "Indisponible"
-        uc_mode = data.get("data", {}).get("uc_mode", -1)
-        return MODES.get(uc_mode, "Inconnu")
 
 
 class DebugBaillclimSensor(CoordinatorEntity, Entity):
@@ -137,10 +103,10 @@ class DebugBaillclimSensor(CoordinatorEntity, Entity):
 
 
 class ThermostatTemperatureSensor(CoordinatorEntity, Entity):
-    def __init__(self, coordinator, tid, name, temperature):
+    def __init__(self, coordinator, tid, name):
         super().__init__(coordinator)
         self._tid = tid
-        self._attr_name = f"Température {name.strip()}"
+        self._attr_name = f"Température {name}"
         self._attr_unique_id = f"baillclim_temp_{tid}"
         self._attr_unit_of_measurement = "°C"
         self._attr_icon = "mdi:thermometer"
@@ -153,21 +119,3 @@ class ThermostatTemperatureSensor(CoordinatorEntity, Entity):
             if th.get("id") == self._tid:
                 return th.get("temperature")
         return None
-
-
-class ThermostatOnOffSensor(CoordinatorEntity, Entity):
-    def __init__(self, coordinator, tid, name):
-        super().__init__(coordinator)
-        self._tid = tid
-        self._attr_name = f"Thermostat {name.strip()} (État)"
-        self._attr_unique_id = f"baillclim_is_on_{tid}"
-        self._attr_icon = "mdi:toggle-switch"
-
-    @property
-    def state(self):
-        data = self.coordinator.data.get("data", {})
-        thermostats = data.get("thermostats", [])
-        for th in thermostats:
-            if th.get("id") == self._tid:
-                return "on" if th.get("is_on") else "off"
-        return "Indisponible"

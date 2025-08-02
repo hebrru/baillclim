@@ -1,11 +1,9 @@
-
 import logging
 import requests
 import re
 import urllib.parse
 
 from homeassistant.components.select import SelectEntity
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -22,6 +20,7 @@ MODES = {
     "Ventilation": 4
 }
 
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
     email = entry.data["email"]
     password = entry.data["password"]
@@ -31,10 +30,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 class BaillclimModeSelect(SelectEntity):
     def __init__(self, email, password):
         self._attr_name = "Mode Climatisation"
+        self._attr_unique_id = "baillclim_mode_general"
         self._attr_options = list(MODES.keys())
         self._attr_current_option = None
         self._email = email
         self._password = password
+
+    @property
+    def current_option(self):
+        return self._attr_current_option
 
     def _login_and_get_session(self):
         session = requests.Session()
@@ -91,24 +95,27 @@ class BaillclimModeSelect(SelectEntity):
             response = session.post(COMMAND_URL, json=payload)
             if response.status_code == 200:
                 self._attr_current_option = option
-                _LOGGER.info("Mode changé vers : %s", option)
+                self.async_write_ha_state()
+                _LOGGER.info("✅ Mode changé vers : %s", option)
             else:
-                _LOGGER.warning("Échec changement mode : %s", response.text)
+                _LOGGER.warning("❌ Échec changement mode : %s", response.text)
         except Exception as e:
             _LOGGER.error("Erreur select_option : %s", e)
 
     def update(self):
         try:
             session = self._login_and_get_session()
-            res = session.get(REGULATIONS_URL)
-            if res.status_code == 200:
-                match = re.search(r"uc_mode:\s*(\d+)", res.text)
-                if match:
-                    mode_code = int(match.group(1))
-                    reverse_modes = {v: k for k, v in MODES.items()}
-                    current_mode = reverse_modes.get(mode_code)
-                    if current_mode:
-                        self._attr_current_option = current_mode
-                        _LOGGER.debug("Mode détecté : %s", current_mode)
+            response = session.post(COMMAND_URL)
+            if response.status_code == 200:
+                data = response.json()
+                uc_mode = data.get("data", {}).get("uc_mode")
+                reverse_modes = {v: k for k, v in MODES.items()}
+                if uc_mode in reverse_modes:
+                    self._attr_current_option = reverse_modes[uc_mode]
+                    _LOGGER.info("🔄 Mode réel détecté via API : %s", self._attr_current_option)
+                else:
+                    _LOGGER.warning("🌀 uc_mode inconnu dans retour JSON : %s", uc_mode)
+            else:
+                _LOGGER.warning("❌ POST /command a échoué : %s", response.status_code)
         except Exception as e:
-            _LOGGER.warning("Erreur récupération mode : %s", e)
+            _LOGGER.error("Erreur récupération mode via API POST : %s", e)

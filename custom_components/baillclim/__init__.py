@@ -1,16 +1,19 @@
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 import asyncio
 
 from .const import DOMAIN
+from .coordinator import create_baillclim_coordinator
 
 async def async_setup(hass: HomeAssistant, config: dict):
     return True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     hass.data.setdefault(DOMAIN, {})
+    coordinator = create_baillclim_coordinator(hass, entry.data["email"], entry.data["password"])
+    await coordinator.async_config_entry_first_refresh()
     hass.data[DOMAIN][entry.entry_id] = entry.data
+    hass.data[DOMAIN][entry.entry_id + "_coordinator"] = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, [
         "sensor", "climate", "switch", "number", "select"
@@ -26,4 +29,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     )
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
+        hass.data[DOMAIN].pop(entry.entry_id + "_coordinator", None)
     return unload_ok
