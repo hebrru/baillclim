@@ -62,8 +62,8 @@ Dans le fichier `const.py`, remplacez les `XXX` par l’ID de votre installation
 
 ```python
 # custom_components/baillclim/const.py
-REGULATIONS_URL = "https://www.baillconnect.com/client/regulations/270"
-COMMAND_URL = "https://www.baillconnect.com/api-client/regulations/270"
+REGULATIONS_URL = "https://www.baillconnect.com/client/regulations/XXX"
+COMMAND_URL = "https://www.baillconnect.com/api-client/regulations/XXX"
 ```
 
 ---
