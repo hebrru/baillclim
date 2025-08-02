@@ -5,16 +5,14 @@ from homeassistant.core import HomeAssistant
 
 DOMAIN = "baillclim"
 
-
-async def async_setup(hass: HomeAssistant, config: dict):
-    """Set up BaillClim from configuration.yaml (non utilisé, mais requis)."""
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Initialisation via configuration.yaml (non utilisée)."""
     return True
 
-
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up BaillClim from a config entry."""
+    """Initialisation de BaillClim via l'interface (config flow)."""
     hass.data.setdefault(DOMAIN, {})
-    
+
     await hass.config_entries.async_forward_entry_setups(entry, [
         "sensor",
         "climate",
@@ -25,9 +23,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     return True
 
-
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
+    """Déchargement de l'intégration."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, [
         "sensor",
         "climate",
