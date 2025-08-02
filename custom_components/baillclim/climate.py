@@ -14,9 +14,16 @@ from .const import LOGIN_URL, REGULATIONS_URL, COMMAND_URL
 
 _LOGGER = logging.getLogger(__name__)
 
+MODES = {
+    "Arrêt": 0,
+    "Froid": 1,
+    "Chauffage": 2,
+    "Désumidificateur": 3,
+    "Ventilation": 4
+}
 
 class BaillclimClimate(ClimateEntity):
-    _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
+    _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.AUTO]
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_min_temp = 16.0
@@ -30,21 +37,34 @@ class BaillclimClimate(ClimateEntity):
         self._attr_name = f"Climatiseur {name}"
         self._attr_unique_id = f"baillclim_climate_{self._id}"
         self._hvac_mode = HVACMode.AUTO if thermostat_data.get("is_on") else HVACMode.OFF
-        self._target_temp = thermostat_data.get("setpoint_hot_t1")
+        self._target_temp_high = thermostat_data.get("setpoint_hot_t1")
+        self._target_temp_low = thermostat_data.get("setpoint_cool_t1")
         self._current_temp = thermostat_data.get("temperature")
         self._is_on = thermostat_data.get("is_on", False)
+        self._uc_mode = thermostat_data.get("uc_mode", 0)
 
     @property
     def hvac_mode(self):
         return HVACMode.AUTO if self._is_on else HVACMode.OFF
 
     @property
-    def target_temperature(self):
-        return self._target_temp
+    def target_temperature_high(self):
+        return self._target_temp_high
+
+    @property
+    def target_temperature_low(self):
+        return self._target_temp_low
 
     @property
     def current_temperature(self):
         return self._current_temp
+
+    @property
+    def extra_state_attributes(self):
+        return {
+            "uc_mode": self._uc_mode,
+            "mode_nom": next((k for k, v in MODES.items() if v == self._uc_mode), "Inconnu")
+        }
 
     async def async_set_hvac_mode(self, hvac_mode):
         self._hvac_mode = hvac_mode
@@ -52,13 +72,20 @@ class BaillclimClimate(ClimateEntity):
         await self._set_api_value(f"thermostats.{self._id}.is_on", self._is_on)
 
     async def async_set_temperature(self, **kwargs):
-        temp = kwargs.get("temperature")
-        if temp is None:
-            return
-        self._target_temp = temp
-        if self._is_on:
-            key = f"thermostats.{self._id}.setpoint_hot_t1"
-            await self._set_api_value(key, temp)
+        high = kwargs.get("target_temp_high")
+        low = kwargs.get("target_temp_low")
+
+        if high is not None:
+            self._target_temp_high = high
+            if self._is_on:
+                key = f"thermostats.{self._id}.setpoint_hot_t1"
+                await self._set_api_value(key, high)
+
+        if low is not None:
+            self._target_temp_low = low
+            if self._is_on:
+                key = f"thermostats.{self._id}.setpoint_cool_t1"
+                await self._set_api_value(key, low)
 
     async def async_update(self):
         def sync_update():
@@ -70,7 +97,9 @@ class BaillclimClimate(ClimateEntity):
                     return {
                         "temp": t.get("temperature"),
                         "is_on": t.get("is_on"),
-                        "hot": t.get("setpoint_hot_t1")
+                        "cool": t.get("setpoint_cool_t1"),
+                        "hot": t.get("setpoint_hot_t1"),
+                        "uc_mode": data.get("data", {}).get("uc_mode", 0)
                     }
             return None
 
@@ -79,7 +108,9 @@ class BaillclimClimate(ClimateEntity):
             if data:
                 self._current_temp = data["temp"]
                 self._is_on = data["is_on"]
-                self._target_temp = data["hot"]
+                self._target_temp_low = data["cool"]
+                self._target_temp_high = data["hot"]
+                self._uc_mode = data["uc_mode"]
                 self._hvac_mode = HVACMode.AUTO if self._is_on else HVACMode.OFF
         except Exception as e:
             _LOGGER.error(f"Erreur update thermostat {self._id} : {e}")
@@ -100,7 +131,7 @@ class BaillclimClimate(ClimateEntity):
             raise Exception("Échec de la connexion")
 
         regulations_page = session.get(REGULATIONS_URL)
-        token_csrf = re.search(r'<meta name="csrf-token" content="([^"]+)"', regulations_page.text).group(1)
+        token_csrf = re.search(r'<meta name="csrf-token" content="([^"]+)">', regulations_page.text).group(1)
         xsrf_token_cookie = session.cookies.get("XSRF-TOKEN")
         x_xsrf_token = urllib.parse.unquote(xsrf_token_cookie)
 
@@ -148,7 +179,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             raise Exception("Échec de la connexion")
 
         regulations_page = session.get(REGULATIONS_URL)
-        token_csrf = re.search(r'<meta name="csrf-token" content="([^"]+)"', regulations_page.text).group(1)
+        token_csrf = re.search(r'<meta name="csrf-token" content="([^"]+)">', regulations_page.text).group(1)
         xsrf_token_cookie = session.cookies.get("XSRF-TOKEN")
         x_xsrf_token = urllib.parse.unquote(xsrf_token_cookie)
 
