@@ -1,0 +1,18 @@
+{
+  "baillclim": {
+    "name": "BaillClim",
+    "hide": false,
+    "country": "FR",
+    "author": "hebrru",
+    "description": "🎛️ Contrôle de la climatisation connectée via BaillConnect (thermostats, modes, consignes...)",
+    "domains": ["climate", "sensor", "select", "switch", "number"],
+    "homeassistant": "2024.6.0",
+    "iot_class": "cloud_polling",
+    "render_readme": true,
+    "filename": "baillclim.zip",
+    "type": "integration",
+    "full_name": "hebrru/baillclim",
+    "zip_release": true,
+    "persistent_directory": true
+  }
+}
