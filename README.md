@@ -1,70 +1,76 @@
+# 🌡️ BaillClim – Intégration BaillConnect pour Home Assistant (v4.2)
+
 ![HACS](https://img.shields.io/badge/HACS-gray?style=for-the-badge)
 ![CUSTOM](https://img.shields.io/badge/CUSTOM-blue?style=for-the-badge)
-![RELEASE](https://img.shields.io/badge/RELEASE-green?style=for-the-badge)
-![VERSION](https://img.shields.io/badge/V4.0.0-purple?style=for-the-badge)
+![RELEASE](https://img.shields.io/badge/RELEASE-yellow?style=for-the-badge)
+![VERSION](https://img.shields.io/badge/V4.2-blue?style=for-the-badge)
 
-# 🌡️ BaillClim – Intégration BaillConnect pour Home Assistant (v4.0.0)
+Développé par [@herbru](https://github.com/hebrru)
 
-**Publié par [@herbru](https://github.com/hebrru)**
-
----
-
-<a href="https://www.buymeacoffee.com/herbru01d" target="_blank"> <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" > </a>
+<a href="https://www.buymeacoffee.com/herbru01d" target="_blank">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;">
+</a>
 
 ---
 
 ## 🔧 Description
 
-**BaillClim** est une intégration personnalisée pour **Home Assistant** permettant de piloter votre **climatiseur connecté via le portail BaillConnect**.
+**BaillClim** est une intégration personnalisée pour **Home Assistant** permettant de piloter vos thermostats connectés via le portail **BaillConnect**.
 
 ---
 
-## 🆕 Nouveautés de la version 4.0.0
+## 🆕 Nouveautés de la version 4.2
 
-✅ Nouvelle détection **automatique des thermostats** via l’API  
-✅ Retour d’état fiable sur le mode de climatisation (`select.mode_climatisation`)  
-✅ Optimisation du polling avec `aiohttp`  
-✅ Debug complet des données via `sensor.debug_baillconnect_data`  
-✅ Ajout des entités `climate` :
-- Simulation complète des thermostats BaillConnect
-- Possibilité de les **mettre en `on` / `off`**
-- Contrôle **direct de la température de consigne**
+✅ Mode `heat_cool` complet avec consigne minimale (froide) à gauche et maximale (chaude) à droite  
+✅ Lecture et contrôle du mode UC actuel (Arrêt, Froid, Chauffage, Ventilation, Déshumidificateur)  
+✅ Refonte du composant `climate` avec support `TARGET_TEMPERATURE_RANGE`  
+✅ Détection automatique des thermostats via l'API  
+✅ Entités `climate` complètes, on/off + température cible  
+✅ Ajout de **2 entités `switch`** pour contrôler ON/OFF des deux zones principales  
+✅ Capteur de débogage `sensor.debug_baillconnect_data`  
 
 ---
 
 ## 🚀 Installation via HACS
 
-### 1. Ajouter le dépôt personnalisé
+1. **Ajouter le dépôt personnalisé** :
+   ```
+   https://github.com/hebrru/baillclim
+   ```
+   HACS → Intégrations → (3 points) → Dépôts personnalisés  
+   Catégorie : Intégration
 
-```txt
-https://github.com/hebrru/baillclim
-```
+2. **Installer l’intégration** via HACS
 
-- Ouvrez HACS → Intégrations → Menu (⋮) → Dépôts personnalisés  
-- Catégorie : **Intégration**  
-- Cliquez sur **Ajouter**
+3. **Redémarrer Home Assistant**
 
-### 2. Installation de l’intégration
+4. Aller dans **Paramètres** → **Appareils & Services** → **Ajouter une intégration**
 
-- Installez **BaillClim** via HACS  
-- Redémarrez Home Assistant  
-- Allez dans **Paramètres → Appareils & Services → Ajouter une intégration**  
-- Recherchez **BaillClim**  
-- Entrez vos identifiants **BaillConnect** (email + mot de passe)
+5. Rechercher **BaillClim** et entrer :
+   - Email BaillConnect
+   - Mot de passe BaillConnect
 
 ---
 
-## ⚙️ Configuration manuelle obligatoire
+## ⚙️ Configuration
 
-### 1️⃣ Remplacer l’ID de régulation (`group_id`)
+Par défaut, `group_id` est configuré sur `270`.
 
-Dans le fichier `const.py`, remplacez les `XXX` par l’ID de votre installation, visible dans l’URL de BaillConnect :
-
-```python
-# custom_components/baillclim/const.py
-REGULATIONS_URL = "https://www.baillconnect.com/client/regulations/XXX"
-COMMAND_URL = "https://www.baillconnect.com/api-client/regulations/XXX"
+Si votre URL est :
 ```
+https://www.baillconnect.com/client/regulations/295
+```
+Alors remplacez dans `const.py` :
+```python
+REGULATIONS_URL = "https://www.baillconnect.com/client/regulations/270"
+COMMAND_URL = "https://www.baillconnect.com/api-client/regulations/270"
+```
+Par :
+```python
+REGULATIONS_URL = "https://www.baillconnect.com/client/regulations/295"
+COMMAND_URL = "https://www.baillconnect.com/api-client/regulations/295"
+```
+Redémarrez ensuite Home Assistant.
 
 ---
 
@@ -84,31 +90,23 @@ action:
 
 ---
 
-## ℹ️ Remarques
+## 🧠 Suggestions / Bugs / Améliorations
 
-🙈 Désolé si tout ne fonctionne pas parfaitement du premier coup.  
-C’est ma première intégration Home Assistant, et aussi ma première publication GitHub.  
-Mais je suis motivé pour continuer à l'améliorer 💪
-
----
-
-## 🧠 Suggestions, bugs ou idées ?
-
-👉 Ouvrez une issue ici : [GitHub Issues](https://github.com/hebrru/baillclim/issues)
-
----
-
-## 📄 Licence
-
-MIT – Libre de réutilisation, modification et intégration dans vos projets.
+👉 [Créer une issue GitHub](https://github.com/hebrru/baillclim/issues)
 
 ---
 
 ## 👤 Auteur
 
-Développé par **herbru**  
-🔗 GitHub : [hebrru/baillclim](https://github.com/hebrru/baillclim)
+**Hervé G. (herbru)**  
+GitHub : [hebrru](https://github.com/hebrru)
+
+<a href="https://www.buymeacoffee.com/herbru01d" target="_blank">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;">
+</a>
 
 ---
 
-<a href="https://www.buymeacoffee.com/herbru01d" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
+## 📄 Licence
+
+**MIT** – Libre de réutilisation, modification et intégration dans vos projets personnels ou professionnels.
