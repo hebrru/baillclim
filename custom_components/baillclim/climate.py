@@ -2,6 +2,7 @@ import logging
 import re
 import requests
 import urllib.parse
+import asyncio
 
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import ClimateEntityFeature, HVACMode
@@ -37,11 +38,14 @@ class BaillclimClimate(ClimateEntity):
         self._attr_name = f"Climatiseur {name}"
         self._attr_unique_id = f"baillclim_climate_{self._id}"
         self._hvac_mode = HVACMode.AUTO if thermostat_data.get("is_on") else HVACMode.OFF
-        self._target_temp_high = thermostat_data.get("setpoint_hot_t1")
-        self._target_temp_low = thermostat_data.get("setpoint_cool_t1")
+        self._target_temp_high = thermostat_data.get("setpoint_cool_t1")
+        self._target_temp_low = thermostat_data.get("setpoint_hot_t1")
         self._current_temp = thermostat_data.get("temperature")
         self._is_on = thermostat_data.get("is_on", False)
         self._uc_mode = thermostat_data.get("uc_mode", 0)
+        self._pending_temp_task = None
+        self._last_temp_high = None
+        self._last_temp_low = None
 
     @property
     def hvac_mode(self):
@@ -72,20 +76,27 @@ class BaillclimClimate(ClimateEntity):
         await self._set_api_value(f"thermostats.{self._id}.is_on", self._is_on)
 
     async def async_set_temperature(self, **kwargs):
-        high = kwargs.get("target_temp_high")
-        low = kwargs.get("target_temp_low")
+        self._last_temp_high = kwargs.get("target_temp_high", self._target_temp_high)
+        self._last_temp_low = kwargs.get("target_temp_low", self._target_temp_low)
 
-        if high is not None:
-            self._target_temp_high = high
-            if self._is_on:
-                key = f"thermostats.{self._id}.setpoint_hot_t1"
-                await self._set_api_value(key, high)
+        if self._pending_temp_task:
+            self._pending_temp_task.cancel()
 
-        if low is not None:
-            self._target_temp_low = low
+        self._pending_temp_task = asyncio.create_task(self._delayed_send_temperature())
+
+    async def _delayed_send_temperature(self):
+        try:
+            await asyncio.sleep(1)
             if self._is_on:
-                key = f"thermostats.{self._id}.setpoint_cool_t1"
-                await self._set_api_value(key, low)
+                if self._last_temp_high is not None:
+                    self._target_temp_high = self._last_temp_high
+                    await self._set_api_value(f"thermostats.{self._id}.setpoint_cool_t1", self._last_temp_high)
+                if self._last_temp_low is not None:
+                    self._target_temp_low = self._last_temp_low
+                    await self._set_api_value(f"thermostats.{self._id}.setpoint_hot_t1", self._last_temp_low)
+                _LOGGER.debug(f"Température envoyée pour {self.name} : froid={self._last_temp_high}, chaud={self._last_temp_low}")
+        except asyncio.CancelledError:
+            _LOGGER.debug("Annulation en attente de température pour %s", self.name)
 
     async def async_update(self):
         def sync_update():
@@ -108,8 +119,8 @@ class BaillclimClimate(ClimateEntity):
             if data:
                 self._current_temp = data["temp"]
                 self._is_on = data["is_on"]
-                self._target_temp_low = data["cool"]
-                self._target_temp_high = data["hot"]
+                self._target_temp_high = data["cool"]
+                self._target_temp_low = data["hot"]
                 self._uc_mode = data["uc_mode"]
                 self._hvac_mode = HVACMode.AUTO if self._is_on else HVACMode.OFF
         except Exception as e:
@@ -149,9 +160,12 @@ class BaillclimClimate(ClimateEntity):
 
     async def _set_api_value(self, key, value):
         def sync_set():
-            session = self._authenticated_session()
-            payload = {key: value}
-            session.post(COMMAND_URL, json=payload)
+            try:
+                session = self._authenticated_session()
+                payload = {key: value}
+                session.post(COMMAND_URL, json=payload)
+            except Exception as e:
+                _LOGGER.error(f"Erreur API pour {key} : {e}")
 
         try:
             await self.hass.async_add_executor_job(sync_set)
