@@ -1,8 +1,6 @@
 {
-    "name": "BaillClim",
-    "content_in_root": false,
-    "domains": [
-        "baillclim"
-    ],
-    "homeassistant": "2023.5.0"
+  "name": "BaillClim",
+  "content_in_root": false,
+  "domain": "baillclim",
+  "homeassistant": "2023.5.0"
 }
