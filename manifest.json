@@ -1,0 +1,12 @@
+{
+  "domain": "baillclim",
+  "name": "BaillClim",
+  "codeowners": ["@hebrru"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/hebrru/baillclim",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/hebrru/baillclim/issues",
+  "requirements": [],
+  "version": "4.2.0"
+}
