@@ -2,11 +2,13 @@ import logging
 import requests
 import re
 import urllib.parse
+from datetime import timedelta
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import Throttle  # 🔁 Ajout pour limiter les appels
 
 from .const import DOMAIN, LOGIN_URL, REGULATIONS_URL, COMMAND_URL
 
@@ -19,7 +21,6 @@ MODES = {
     "Désumidificateur": 3,
     "Ventilation": 4
 }
-
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
     email = entry.data["email"]
@@ -102,20 +103,19 @@ class BaillclimModeSelect(SelectEntity):
         except Exception as e:
             _LOGGER.error("Erreur select_option : %s", e)
 
+    @Throttle(timedelta(seconds=60))  # 🔁 Limite à 1 appel par minute
     def update(self):
         try:
             session = self._login_and_get_session()
             response = session.post(COMMAND_URL)
-            if response.status_code == 200:
-                data = response.json()
-                uc_mode = data.get("data", {}).get("uc_mode")
-                reverse_modes = {v: k for k, v in MODES.items()}
-                if uc_mode in reverse_modes:
-                    self._attr_current_option = reverse_modes[uc_mode]
-                    _LOGGER.info("🔄 Mode réel détecté via API : %s", self._attr_current_option)
-                else:
-                    _LOGGER.warning("🌀 uc_mode inconnu dans retour JSON : %s", uc_mode)
+            response.raise_for_status()
+            data = response.json()
+            uc_mode = data.get("data", {}).get("uc_mode")
+            reverse_modes = {v: k for k, v in MODES.items()}
+            if uc_mode in reverse_modes:
+                self._attr_current_option = reverse_modes[uc_mode]
+                _LOGGER.debug("🔄 Mode réel détecté via API : %s", self._attr_current_option)
             else:
-                _LOGGER.warning("❌ POST /command a échoué : %s", response.status_code)
+                _LOGGER.warning("🌀 uc_mode inconnu dans retour JSON : %s", uc_mode)
         except Exception as e:
             _LOGGER.error("Erreur récupération mode via API POST : %s", e)
