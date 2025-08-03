@@ -1,4 +1,3 @@
-
 import logging
 import re
 import urllib.parse
@@ -10,6 +9,7 @@ from homeassistant.core import HomeAssistant
 from .const import DOMAIN, LOGIN_URL, REGULATIONS_URL, COMMAND_URL
 
 _LOGGER = logging.getLogger(__name__)
+
 
 def get_authenticated_session(email, password):
     session = requests.Session()
@@ -54,6 +54,7 @@ def get_authenticated_session(email, password):
 
     return session
 
+
 def create_baillclim_coordinator(hass: HomeAssistant, email: str, password: str):
     async def async_update_data():
         try:
@@ -84,6 +85,9 @@ def create_baillclim_coordinator(hass: HomeAssistant, email: str, password: str)
                 return result
 
             data = await hass.async_add_executor_job(sync_fetch)
+            if data is None:
+                _LOGGER.warning("No data retrieved from BaillConnect API.")
+                return {}
             return data
         except Exception as err:
             _LOGGER.error("Erreur lors de la récupération des données thermostats : %s", err)
