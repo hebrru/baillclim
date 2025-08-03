@@ -1,11 +1,12 @@
 {
   "domain": "baillclim",
   "name": "BaillClim",
-  "version": "4.2.0",
-  "documentation": "https://github.com/hebrru/baillclim",
-  "dependencies": [],
   "codeowners": ["@hebrru"],
-  "requirements": [],
   "config_flow": true,
-  "iot_class": "cloud_polling"
+  "dependencies": [],
+  "documentation": "https://github.com/hebrru/baillclim",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/hebrru/baillclim/issues",
+  "requirements": [],
+  "version": "4.2.0"
 }
