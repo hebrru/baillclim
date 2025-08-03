@@ -1,4 +1,3 @@
-
 import logging
 import requests
 import re
@@ -7,89 +6,94 @@ import urllib.parse
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, LOGIN_URL, REGULATIONS_URL, COMMAND_URL
+from .const import DOMAIN, COMMAND_URL
+from .coordinator import create_baillclim_coordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class ZoneSwitch(CoordinatorEntity, SwitchEntity):
+    def __init__(self, coordinator, zone_id, zone_name, email, password):
+        super().__init__(coordinator)
+        self._id = zone_id
+        self._name = zone_name
+        self._email = email
+        self._password = password
+        self._attr_name = f"Zone {self._name} Active"
+        self._attr_unique_id = f"baillclim_zone_{self._id}"
+
+    @property
+    def is_on(self):
+        try:
+            zones = self.coordinator.data.get("data", {}).get("zones", [])
+            for zone in zones:
+                if zone.get("id") == self._id:
+                    return zone.get("mode") == 3
+        except Exception as e:
+            _LOGGER.error(f"Erreur lecture zone {self._id} : {e}")
+        return False
+
+    def _set_zone_mode(self, value):
+        try:
+            regulations_id = self.coordinator.data.get("data", {}).get("id")
+            if not regulations_id:
+                raise Exception("❌ regulations_id manquant dans le coordinator")
+
+            session = requests.Session()
+            login_page = session.get("https://www.baillconnect.com/client/connexion")
+            token = re.search(r'name="_token" value="([^"]+)"', login_page.text).group(1)
+            session.post("https://www.baillconnect.com/client/connexion", data={
+                "_token": token,
+                "email": self._email,
+                "password": self._password
+            })
+
+            regulations_url = f"https://www.baillconnect.com/client/regulations/{regulations_id}"
+            regulations_page = session.get(regulations_url)
+            csrf_token = re.search(r'<meta name="csrf-token" content="([^"]+)">', regulations_page.text).group(1)
+            xsrf_token = urllib.parse.unquote(session.cookies.get("XSRF-TOKEN"))
+
+            session.headers.update({
+                "Content-Type": "application/json;charset=UTF-8",
+                "Accept": "application/json, text/plain, */*",
+                "X-CSRF-TOKEN": csrf_token,
+                "X-XSRF-TOKEN": xsrf_token,
+                "X-Requested-With": "XMLHttpRequest",
+                "Origin": "https://www.baillconnect.com",
+                "Referer": regulations_url
+            })
+
+            response = session.post(COMMAND_URL, json={f"zones.{self._id}.mode": value})
+            if response.status_code != 200:
+                _LOGGER.warning(f"❌ API zone {self._id} : {response.status_code} - {response.text}")
+        except Exception as e:
+            _LOGGER.error(f"Erreur API pour zones.{self._id}.mode : {e}")
+
+    async def async_turn_on(self, **kwargs):
+        await self.hass.async_add_executor_job(self._set_zone_mode, 3)
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs):
+        await self.hass.async_add_executor_job(self._set_zone_mode, 0)
+        await self.coordinator.async_request_refresh()
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
     email = entry.data["email"]
     password = entry.data["password"]
-    zones = await hass.async_add_executor_job(fetch_zones, email, password)
 
-    entities = [ZoneSwitch(z, email, password) for z in zones]
+    coordinator = create_baillclim_coordinator(hass, email, password)
+    await coordinator.async_config_entry_first_refresh()
+
+    entities = []
+    zones = coordinator.data.get("data", {}).get("zones", [])
+    for zone in zones:
+        zone_id = zone.get("id")
+        name = zone.get("name", f"Zone {zone_id}")
+        if zone_id is not None:
+            entities.append(ZoneSwitch(coordinator, zone_id, name, email, password))
+
     async_add_entities(entities)
-
-
-def fetch_zones(email, password):
-    session = requests.Session()
-    login_page = session.get(LOGIN_URL)
-    token = re.search(r'name="_token" value="([^"]+)"', login_page.text).group(1)
-    session.post(LOGIN_URL, data={"_token": token, "email": email, "password": password})
-    regulations_page = session.get(REGULATIONS_URL)
-    csrf_token = re.search(r'<meta name="csrf-token" content="([^"]+)"', regulations_page.text).group(1)
-    xsrf_token = urllib.parse.unquote(session.cookies.get("XSRF-TOKEN"))
-    session.headers.update({
-        "Content-Type": "application/json;charset=UTF-8",
-        "Accept": "application/json, text/plain, */*",
-        "X-CSRF-TOKEN": csrf_token,
-        "X-XSRF-TOKEN": xsrf_token,
-        "X-Requested-With": "XMLHttpRequest",
-        "Origin": "https://www.baillconnect.com",
-        "Referer": REGULATIONS_URL
-    })
-
-    data = session.post(COMMAND_URL).json()
-    return data.get("data", {}).get("zones", [])
-
-
-class ZoneSwitch(SwitchEntity):
-    def __init__(self, zone, email, password):
-        self._id = zone["id"]
-        self._name = zone["name"]
-        self._is_on = zone.get("mode") == 3
-        self._email = email
-        self._password = password
-
-    @property
-    def name(self):
-        return f"Zone {self._name} Active"
-
-    @property
-    def unique_id(self):
-        return f"baillclim_zone_{self._id}"
-
-    @property
-    def is_on(self):
-        return self._is_on
-
-    def _set_zone_mode(self, value):
-        session = requests.Session()
-        login_page = session.get(LOGIN_URL)
-        token = re.search(r'name="_token" value="([^"]+)"', login_page.text).group(1)
-        session.post(LOGIN_URL, data={"_token": token, "email": self._email, "password": self._password})
-        regulations_page = session.get(REGULATIONS_URL)
-        csrf_token = re.search(r'<meta name="csrf-token" content="([^"]+)"', regulations_page.text).group(1)
-        xsrf_token = urllib.parse.unquote(session.cookies.get("XSRF-TOKEN"))
-        session.headers.update({
-            "Content-Type": "application/json;charset=UTF-8",
-            "Accept": "application/json, text/plain, */*",
-            "X-CSRF-TOKEN": csrf_token,
-            "X-XSRF-TOKEN": xsrf_token,
-            "X-Requested-With": "XMLHttpRequest",
-            "Origin": "https://www.baillconnect.com",
-            "Referer": REGULATIONS_URL
-        })
-        session.post(COMMAND_URL, json={f"zones.{self._id}.mode": value})
-
-    async def async_turn_on(self, **kwargs):
-        await self.hass.async_add_executor_job(self._set_zone_mode, 3)
-        self._is_on = True
-        self.async_write_ha_state()
-
-    async def async_turn_off(self, **kwargs):
-        await self.hass.async_add_executor_job(self._set_zone_mode, 0)
-        self._is_on = False
-        self.async_write_ha_state()
