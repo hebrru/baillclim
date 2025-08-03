@@ -20,7 +20,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     entities = [DebugBaillclimSensor(coordinator)]
 
-    # 🔁 Températures des thermostats
     thermostats = coordinator.data.get("data", {}).get("thermostats", [])
     for th in thermostats:
         tid = th.get("id")

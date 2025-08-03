@@ -7,10 +7,9 @@ from datetime import timedelta
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, LOGIN_URL, REGULATIONS_URL, COMMAND_URL
+from .const import DOMAIN, LOGIN_URL
 
 _LOGGER = logging.getLogger(__name__)
-
 
 def get_authenticated_session(email, password):
     session = requests.Session()
@@ -22,32 +21,40 @@ def get_authenticated_session(email, password):
         raise Exception("Token _token introuvable")
     login_token = token_match.group(1)
 
-    # 2. Login
-    login_data = {
+    # 2. Login and follow redirection to get regulations_id
+    login_response = session.post(LOGIN_URL, data={
         "_token": login_token,
         "email": email,
         "password": password
-    }
-    login_response = session.post(LOGIN_URL, data=login_data)
+    }, allow_redirects=True)
+
     if login_response.status_code not in (200, 302):
         raise Exception(f"Erreur login : {login_response.status_code}")
     if "client/connexion" in login_response.url:
         raise Exception("Login échoué")
 
-    # 3. Get CSRF token from regulations page
-    regulations_page = session.get(REGULATIONS_URL)
-    token_csrf_match = re.search(r'<meta name="csrf-token" content="([^"]+)"', regulations_page.text)
+    # 3. Extract regulations_id from redirected URL
+    match = re.search(r"/client/regulations/(\d+)", login_response.url)
+    if not match:
+        raise Exception("Impossible de trouver regulations_id dans l'URL de redirection après login")
+    regulations_id = match.group(1)
+    regulations_url = f"https://www.baillconnect.com/client/regulations/{regulations_id}"
+    command_url = f"https://www.baillconnect.com/api-client/regulations/{regulations_id}"
+
+    # 4. Get CSRF token from regulations page
+    regulations_page = session.get(regulations_url)
+    token_csrf_match = re.search(r'<meta name="csrf-token" content="([^"]+)">', regulations_page.text)
     if not token_csrf_match:
         raise Exception("Token CSRF non trouvé")
     x_csrf_token = token_csrf_match.group(1)
 
-    # 4. Get cookie XSRF
+    # 5. Get cookie XSRF
     xsrf_token_cookie = session.cookies.get("XSRF-TOKEN")
     if not xsrf_token_cookie:
         raise Exception("Cookie XSRF-TOKEN manquant")
     x_xsrf_token = urllib.parse.unquote(xsrf_token_cookie)
 
-    # 5. Set headers
+    # 6. Set headers
     session.headers.update({
         "Content-Type": "application/json;charset=UTF-8",
         "Accept": "application/json, text/plain, */*",
@@ -55,20 +62,21 @@ def get_authenticated_session(email, password):
         "X-XSRF-TOKEN": x_xsrf_token,
         "X-Requested-With": "XMLHttpRequest",
         "Origin": "https://www.baillconnect.com",
-        "Referer": REGULATIONS_URL
+        "Referer": regulations_url
     })
 
-    return session
-
+    return session, regulations_id, command_url
 
 def create_baillclim_coordinator(hass: HomeAssistant, email: str, password: str):
     async def async_update_data():
         try:
             def sync_fetch():
-                session = get_authenticated_session(email, password)
-                response = session.post(COMMAND_URL)
+                session, regulations_id, command_url = get_authenticated_session(email, password)
+                response = session.post(command_url)
                 _LOGGER.debug("📥 Données JSON reçues : %s", response.text)
-                return response.json()
+                data = response.json()
+                data["id"] = regulations_id  # Injecte l'ID pour réutilisation dans les entités
+                return data
             return await hass.async_add_executor_job(sync_fetch)
 
         except Exception as err:

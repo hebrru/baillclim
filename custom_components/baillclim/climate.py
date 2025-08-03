@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, LOGIN_URL, COMMAND_URL
+from .const import DOMAIN
 from .coordinator import create_baillclim_coordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -73,15 +73,12 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
         is_on = hvac_mode != HVACMode.OFF
         await self._set_api_value(f"thermostats.{self._id}.is_on", is_on)
         await self.coordinator.async_request_refresh()
-        await self.coordinator.async_request_refresh()
 
     async def async_set_temperature(self, **kwargs):
         if "target_temp_high" in kwargs:
             await self._set_api_value(f"thermostats.{self._id}.setpoint_cool_t1", kwargs["target_temp_high"])
-        await self.coordinator.async_request_refresh()
         if "target_temp_low" in kwargs:
             await self._set_api_value(f"thermostats.{self._id}.setpoint_hot_t1", kwargs["target_temp_low"])
-        await self.coordinator.async_request_refresh()
         await self.coordinator.async_request_refresh()
 
     async def _set_api_value(self, key, value):
@@ -89,9 +86,9 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
             session = requests.Session()
 
             # 1. Login
-            login_page = session.get(LOGIN_URL)
+            login_page = session.get("https://www.baillconnect.com/client/connexion")
             token = re.search(r'name="_token" value="([^"]+)"', login_page.text).group(1)
-            session.post(LOGIN_URL, data={
+            session.post("https://www.baillconnect.com/client/connexion", data={
                 "_token": token,
                 "email": self.coordinator.config_entry.data["email"],
                 "password": self.coordinator.config_entry.data["password"]
@@ -106,7 +103,7 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
 
             # 3. Lire les tokens nécessaires
             regulations_page = session.get(regulations_url)
-            csrf = re.search(r'<meta name="csrf-token" content="([^"]+)"', regulations_page.text).group(1)
+            csrf = re.search(r'<meta name="csrf-token" content="([^"]+)">', regulations_page.text).group(1)
             xsrf = urllib.parse.unquote(session.cookies.get("XSRF-TOKEN"))
 
             # 4. Headers et POST
@@ -120,7 +117,8 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
                 "Referer": regulations_url
             })
 
-            session.post(COMMAND_URL, json={key: value})
+            url = f"https://www.baillconnect.com/api-client/regulations/{regulations_id}"
+            session.post(url, json={key: value})
 
         await self.hass.async_add_executor_job(sync_send)
 

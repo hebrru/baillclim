@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, COMMAND_URL
+from .const import DOMAIN
 from .coordinator import create_baillclim_coordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -26,23 +26,35 @@ class ZoneSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_unique_id = f"baillclim_zone_{self._id}"
 
     @property
+    def unique_id(self):
+        return self._attr_unique_id
+
+    @property
     def is_on(self):
-        try:
-            zones = self.coordinator.data.get("data", {}).get("zones", [])
-            for zone in zones:
-                if zone.get("id") == self._id:
-                    return zone.get("mode") == 3
-        except Exception as e:
-            _LOGGER.error(f"Erreur lecture zone {self._id} : {e}")
+        zones = self.coordinator.data.get("data", {}).get("zones", [])
+        for zone in zones:
+            if zone.get("id") == self._id:
+                return zone.get("mode") == 3
         return False
 
-    def _set_zone_mode(self, value):
+    # Méthode supprimée : plus de regroupement appareil
+        return {
+            "identifiers": {(DOMAIN, f"zone_{self._id}")},
+            "name": f"Zone {self._name}",
+            "manufacturer": "BaillConnect",
+            "model": "Zone programmable"
+        }
+
+    def _set_zone_mode(self, value: int):
         try:
             regulations_id = self.coordinator.data.get("data", {}).get("id")
             if not regulations_id:
                 raise Exception("❌ regulations_id manquant dans le coordinator")
 
             session = requests.Session()
+            session.headers.update({"User-Agent": "Mozilla/5.0"})
+
+            # 🔑 Login
             login_page = session.get("https://www.baillconnect.com/client/connexion")
             token = re.search(r'name="_token" value="([^"]+)"', login_page.text).group(1)
             session.post("https://www.baillconnect.com/client/connexion", data={
@@ -51,6 +63,7 @@ class ZoneSwitch(CoordinatorEntity, SwitchEntity):
                 "password": self._password
             })
 
+            # 🔄 Tokens sécurisés
             regulations_url = f"https://www.baillconnect.com/client/regulations/{regulations_id}"
             regulations_page = session.get(regulations_url)
             csrf_token = re.search(r'<meta name="csrf-token" content="([^"]+)">', regulations_page.text).group(1)
@@ -66,19 +79,28 @@ class ZoneSwitch(CoordinatorEntity, SwitchEntity):
                 "Referer": regulations_url
             })
 
-            response = session.post(COMMAND_URL, json={f"zones.{self._id}.mode": value})
-            if response.status_code != 200:
-                _LOGGER.warning(f"❌ API zone {self._id} : {response.status_code} - {response.text}")
+            # ✅ Changement d’état
+            url = f"https://www.baillconnect.com/api-client/regulations/{regulations_id}"
+            payload = {f"zones.{self._id}.mode": value}
+            response = session.post(url, json=payload)
+
+            if response.status_code == 200:
+                _LOGGER.info("✅ Zone %s mode changé vers %s", self._id, value)
+            else:
+                _LOGGER.warning("❌ Échec changement zone %s : %s", self._id, response.text)
+
         except Exception as e:
-            _LOGGER.error(f"Erreur API pour zones.{self._id}.mode : {e}")
+            _LOGGER.error("Erreur API zone %s : %s", self._id, e)
 
     async def async_turn_on(self, **kwargs):
         await self.hass.async_add_executor_job(self._set_zone_mode, 3)
         await self.coordinator.async_request_refresh()
+        self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs):
         await self.hass.async_add_executor_job(self._set_zone_mode, 0)
         await self.coordinator.async_request_refresh()
+        self.async_write_ha_state()
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
@@ -94,6 +116,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         zone_id = zone.get("id")
         name = zone.get("name", f"Zone {zone_id}")
         if zone_id is not None:
-            entities.append(ZoneSwitch(coordinator, zone_id, name, email, password))
+            entities.append(ZoneSwitch(coordinator, zone_id, name.strip(), email, password))
 
     async_add_entities(entities)

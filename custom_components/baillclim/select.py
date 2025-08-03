@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, LOGIN_URL, COMMAND_URL
+from .const import DOMAIN
 from .coordinator import create_baillclim_coordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -53,17 +53,19 @@ class BaillclimModeSelect(CoordinatorEntity, SelectEntity):
             _LOGGER.warning("Erreur accès current_option : %s", e)
             return None
 
-    def select_option(self, option: str) -> None:
-        """Écriture via API"""
+    async def async_select_option(self, option: str) -> None:
         if option not in MODES:
             _LOGGER.warning("Mode inconnu : %s", option)
             return
+        await self.hass.async_add_executor_job(self._set_mode_sync, option)
+        await self.coordinator.async_request_refresh()
 
+    def _set_mode_sync(self, option: str):
         try:
             session = requests.Session()
+            session.headers.update({"User-Agent": "Mozilla/5.0"})
 
-            # 🔑 LOGIN
-            login_page = session.get(LOGIN_URL)
+            login_page = session.get("https://www.baillconnect.com/client/connexion")
             token_match = re.search(r'name="_token" value="([^"]+)"', login_page.text)
             if not token_match:
                 raise Exception("Token _token introuvable")
@@ -75,20 +77,19 @@ class BaillclimModeSelect(CoordinatorEntity, SelectEntity):
                 "password": self._password
             }
 
-            login_response = session.post(LOGIN_URL, data=login_data)
+            login_response = session.post("https://www.baillconnect.com/client/connexion", data=login_data)
             if login_response.status_code not in (200, 302):
                 raise Exception(f"Erreur login : {login_response.status_code}")
             if "client/connexion" in login_response.url:
                 raise Exception("Login échoué")
 
-            # 🔄 Récupération ID dynamique
             regulations_id = self.coordinator.data.get("data", {}).get("id")
             if not regulations_id:
                 raise Exception("ID regulations introuvable dans coordinator")
 
             regulations_url = f"https://www.baillconnect.com/client/regulations/{regulations_id}"
             regulations_page = session.get(regulations_url)
-            token_csrf_match = re.search(r'<meta name="csrf-token" content="([^"]+)"', regulations_page.text)
+            token_csrf_match = re.search(r'<meta name="csrf-token" content="([^"]+)">', regulations_page.text)
             if not token_csrf_match:
                 raise Exception("Token CSRF non trouvé")
             x_csrf_token = token_csrf_match.group(1)
@@ -108,12 +109,14 @@ class BaillclimModeSelect(CoordinatorEntity, SelectEntity):
                 "Referer": regulations_url
             })
 
+            url = f"https://www.baillconnect.com/api-client/regulations/{regulations_id}"
             payload = {"uc_mode": MODES[option]}
-            response = session.post(COMMAND_URL, json=payload)
+            response = session.post(url, json=payload)
+
             if response.status_code == 200:
                 _LOGGER.info("✅ Mode changé via API : %s", option)
-                self.coordinator.async_request_refresh()
             else:
                 _LOGGER.warning("❌ Échec changement mode : %s", response.text)
+
         except Exception as e:
             _LOGGER.error("Erreur lors du changement de mode : %s", e)
