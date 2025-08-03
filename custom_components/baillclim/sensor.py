@@ -22,61 +22,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     email = entry.data["email"]
     password = entry.data["password"]
 
-    async def fetch_data():
-        try:
-            async with aiohttp.ClientSession(headers=HEADERS) as session:
-                async with session.get(LOGIN_URL) as resp:
-                    html = await resp.text()
-                token = re.search(r'name="_token" value="([^"]+)"', html)
-                if not token:
-                    raise Exception("Token CSRF non trouvé")
-                token_val = token.group(1)
+    # Création du coordinator
+    coordinator = create_baillclim_coordinator(hass, email, password)
+    await coordinator.async_refresh()
 
-                payload = {
-                    "_token": token_val,
-                    "email": email,
-                    "password": password
-                }
-                headers_login = {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "Referer": LOGIN_URL
-                }
-                async with session.post(LOGIN_URL, data=payload, headers=headers_login, allow_redirects=True) as resp2:
-                    if "client/connexion" in str(resp2.url):
-                        raise Exception("Login échoué")
-
-                async with session.get(REGULATIONS_URL) as resp3:
-                    html = await resp3.text()
-                csrf_token = re.search(r'<meta name="csrf-token" content="([^"]+)"', html)
-                if not csrf_token:
-                    raise Exception("Token X-CSRF non trouvé")
-                token_val = csrf_token.group(1)
-
-                session.headers.update({
-                    "X-Requested-With": "XMLHttpRequest",
-                    "X-CSRF-TOKEN": token_val
-                })
-
-                async with session.post(COMMAND_URL) as final:
-                    data = await final.json()
-                return data
-        except Exception as e:
-            _LOGGER.error("❌ Erreur récupération sensor : %s", e)
-            return None
-
-    coordinator = DataUpdateCoordinator(
-        hass,
-        _LOGGER,
-        name="baillclim_sensor",
-        update_method=fetch_data,
-        update_interval=timedelta(seconds=10),
-    )
-
-    await coordinator.async_config_entry_first_refresh()
+    if coordinator.data is None:
+        _LOGGER.warning("BaillClim coordinator data is None during setup.")
+        thermostats = []
+    else:
+        thermostats = coordinator.data.get("data", {}).get("thermostats", [])
+        _LOGGER.debug(f"BaillClim thermostats data: {thermostats}")
 
     entities = [DebugBaillclimSensor(coordinator)]
 
-    thermostats = coordinator.data.get("data", {}).get("thermostats", [])
     for th in thermostats:
         tid = th.get("id")
         name = th.get("name", f"Thermostat {tid}")
@@ -113,6 +71,8 @@ class ThermostatTemperatureSensor(CoordinatorEntity, Entity):
 
     @property
     def state(self):
+        if self.coordinator.data is None:
+            return None
         data = self.coordinator.data.get("data", {})
         thermostats = data.get("thermostats", [])
         for th in thermostats:
