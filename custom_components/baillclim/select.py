@@ -30,23 +30,51 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     coordinator = create_baillclim_coordinator(hass, email, password)
     await coordinator.async_config_entry_first_refresh()
 
-    async_add_entities([BaillclimModeSelect(coordinator, email, password)], True)
+    entities = []
+
+    data = coordinator.data.get("data", {})
+
+    # Mode multi-régulations
+    if isinstance(data, dict) and "regulations" in data:
+        for regulation in data["regulations"]:
+            reg_id = regulation.get("id")
+            if reg_id is not None:
+                entities.append(BaillclimModeSelect(coordinator, email, password, reg_id))
+    # Mode mono-régulation
+    elif "id" in data:
+        entities.append(BaillclimModeSelect(coordinator, email, password, data["id"]))
+    else:
+        _LOGGER.warning("❌ Aucun ID de régulation détecté")
+
+    async_add_entities(entities, True)
 
 
 class BaillclimModeSelect(CoordinatorEntity, SelectEntity):
-    def __init__(self, coordinator: DataUpdateCoordinator, email: str, password: str):
+    def __init__(self, coordinator: DataUpdateCoordinator, email: str, password: str, regulation_id: int):
         super().__init__(coordinator)
         self._email = email
         self._password = password
-        self._attr_name = "Mode Climatisation"
-        self._attr_unique_id = "baillclim_mode_general"
+        self._regulation_id = regulation_id
+        self._attr_name = f"Mode Climatisation {regulation_id}"
+        self._attr_unique_id = f"baillclim_mode_clim_{regulation_id}"
         self._attr_options = list(MODES.keys())
         self._attr_current_option = None
 
     @property
     def current_option(self):
         try:
-            uc_mode = self.coordinator.data.get("data", {}).get("uc_mode")
+            # Mode multi
+            data = self.coordinator.data.get("data", {})
+            uc_mode = None
+            if "regulations" in data:
+                for reg in data["regulations"]:
+                    if reg.get("id") == self._regulation_id:
+                        uc_mode = reg.get("uc_mode")
+                        break
+            else:
+                # Mode unique
+                uc_mode = data.get("uc_mode")
+
             reverse_modes = {v: k for k, v in MODES.items()}
             return reverse_modes.get(uc_mode)
         except Exception as e:
@@ -83,11 +111,7 @@ class BaillclimModeSelect(CoordinatorEntity, SelectEntity):
             if "client/connexion" in login_response.url:
                 raise Exception("Login échoué")
 
-            regulations_id = self.coordinator.data.get("data", {}).get("id")
-            if not regulations_id:
-                raise Exception("ID regulations introuvable dans coordinator")
-
-            regulations_url = f"https://www.baillconnect.com/client/regulations/{regulations_id}"
+            regulations_url = f"https://www.baillconnect.com/client/regulations/{self._regulation_id}"
             regulations_page = session.get(regulations_url)
             token_csrf_match = re.search(r'<meta name="csrf-token" content="([^"]+)">', regulations_page.text)
             if not token_csrf_match:
@@ -109,14 +133,14 @@ class BaillclimModeSelect(CoordinatorEntity, SelectEntity):
                 "Referer": regulations_url
             })
 
-            url = f"https://www.baillconnect.com/api-client/regulations/{regulations_id}"
+            url = f"https://www.baillconnect.com/api-client/regulations/{self._regulation_id}"
             payload = {"uc_mode": MODES[option]}
             response = session.post(url, json=payload)
 
             if response.status_code == 200:
-                _LOGGER.info("✅ Mode changé via API : %s", option)
+                _LOGGER.info("✅ Mode changé via API (%s) : %s", self._regulation_id, option)
             else:
-                _LOGGER.warning("❌ Échec changement mode : %s", response.text)
+                _LOGGER.warning("❌ Échec changement mode (%s) : %s", self._regulation_id, response.text)
 
         except Exception as e:
-            _LOGGER.error("Erreur lors du changement de mode : %s", e)
+            _LOGGER.error("Erreur lors du changement de mode (%s) : %s", self._regulation_id, e)
