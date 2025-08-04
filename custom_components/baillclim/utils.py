@@ -6,7 +6,12 @@ import urllib.parse
 _LOGGER = logging.getLogger(__name__)
 
 
-def create_authenticated_session(email: str, password: str, reg_id: int = 0) -> requests.Session:
+def create_authenticated_session(
+    email: str,
+    password: str,
+    reg_id: int = 0,
+    timeout: int = 15
+) -> requests.Session:
     """Crée une session authentifiée pour BaillConnect.
     
     Si reg_id > 0, configure les headers pour les requêtes API sécurisées.
@@ -16,7 +21,7 @@ def create_authenticated_session(email: str, password: str, reg_id: int = 0) -> 
         session.headers.update({"User-Agent": "Mozilla/5.0"})
 
         # 🔐 Étape 1 : Token _token pour le formulaire de login
-        login_page = session.get("https://www.baillconnect.com/client/connexion", timeout=10)
+        login_page = session.get("https://www.baillconnect.com/client/connexion", timeout=timeout)
         token_match = re.search(r'name="_token" value="([^"]+)"', login_page.text)
         if not token_match:
             raise Exception("❌ Token _token introuvable sur la page de connexion.")
@@ -26,19 +31,21 @@ def create_authenticated_session(email: str, password: str, reg_id: int = 0) -> 
         login_response = session.post(
             "https://www.baillconnect.com/client/connexion",
             data={"_token": login_token, "email": email, "password": password},
-            timeout=10
+            timeout=timeout
         )
 
-        if login_response.status_code not in (200, 302) or "client/connexion" in login_response.url:
-            raise Exception("❌ Échec de connexion à BaillConnect")
+        if login_response.status_code not in (200, 302):
+            raise Exception(f"❌ Connexion échouée : code HTTP {login_response.status_code}")
+        if "client/connexion" in login_response.url:
+            raise Exception("❌ Échec de connexion : redirection vers la page de connexion détectée")
 
-        # 🧱 Si reg_id == 0 → utilisé uniquement pour explorer la liste des régulations
+        # 🧱 reg_id == 0 → uniquement pour explorer la liste des régulations
         if not reg_id:
             return session
 
         # 🔐 Étape 3 : Récupération des tokens CSRF/XSRF pour cette régulation
         regulations_url = f"https://www.baillconnect.com/client/regulations/{reg_id}"
-        regulations_page = session.get(regulations_url, timeout=10)
+        regulations_page = session.get(regulations_url, timeout=timeout)
 
         csrf_token_match = re.search(r'<meta name="csrf-token" content="([^"]+)"', regulations_page.text)
         xsrf_cookie = session.cookies.get("XSRF-TOKEN")

@@ -8,7 +8,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import create_baillclim_coordinator
 from .utils import create_authenticated_session
 
 _LOGGER = logging.getLogger(__name__)
@@ -84,6 +83,16 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
             _LOGGER.warning("Erreur extra_state_attributes : %s", e)
         return {}
 
+    @property
+    def device_info(self):
+        return {
+            'identifiers': {(DOMAIN, f'baillclim_reg_{self._reg_id}')},
+            'name': f'BaillClim Régulation {self._reg_id}',
+            'manufacturer': 'BaillConnect',
+            'model': 'Régulation',
+            'entry_type': 'service'
+        }
+
     async def async_set_hvac_mode(self, hvac_mode):
         is_on = hvac_mode != HVACMode.OFF
         await self._set_api_value(f"thermostats.{self._id}.is_on", is_on)
@@ -118,9 +127,8 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
-    coordinator = create_baillclim_coordinator(hass, entry.data["email"], entry.data["password"])
+    coordinator = hass.data[DOMAIN][entry.entry_id]
     coordinator.config_entry = entry
-    await coordinator.async_config_entry_first_refresh()
 
     if not coordinator.data:
         _LOGGER.error("❌ coordinator.data est vide.")

@@ -6,7 +6,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpda
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .coordinator import create_baillclim_coordinator
 from .utils import create_authenticated_session
 
 _LOGGER = logging.getLogger(__name__)
@@ -21,11 +20,10 @@ MODES = {
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
+    coordinator: DataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
     email = entry.data["email"]
     password = entry.data["password"]
-
-    coordinator = create_baillclim_coordinator(hass, email, password)
-    await coordinator.async_config_entry_first_refresh()
+    coordinator.config_entry = entry
 
     if not coordinator.data:
         _LOGGER.error("❌ Données absentes du coordinator. Abandon du setup.")
@@ -69,7 +67,7 @@ class BaillclimModeSelect(CoordinatorEntity, SelectEntity):
                     uc_mode = reg_data.get("uc_mode")
                     return {v: k for k, v in MODES.items()}.get(uc_mode)
         except Exception as e:
-            _LOGGER.warning("Erreur accès current_option (reg_id=%s) : %s", self._regulation_id, e)
+            _LOGGER.warning("⚠️ Erreur accès current_option (reg_id=%s) : %s", self._regulation_id, e)
         return None
 
     async def async_select_option(self, option: str) -> None:
@@ -99,3 +97,13 @@ class BaillclimModeSelect(CoordinatorEntity, SelectEntity):
 
         except Exception as e:
             _LOGGER.error("❌ Erreur changement de mode (reg_id=%s) : %s", self._regulation_id, e)
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, f"baillclim_reg_{self._regulation_id}")},
+            "name": f"BaillClim Régulation {self._regulation_id}",
+            "manufacturer": "BaillConnect",
+            "model": "Régulation",
+            "entry_type": "service",
+        }

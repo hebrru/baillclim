@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
@@ -19,9 +20,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     email = entry.data["email"]
     password = entry.data["password"]
 
-    coordinator = create_baillclim_coordinator(hass, email, password)
+    # 🔁 Options : priorité aux options (modifiables), sinon fallback sur data
+    update_seconds = entry.options.get("update_interval", entry.data.get("update_interval", 60))
+    timeout_seconds = entry.options.get("timeout", entry.data.get("timeout", 15))
 
-    # Appel initial pour récupérer les données
+    coordinator = create_baillclim_coordinator(
+        hass=hass,
+        email=email,
+        password=password,
+        update_interval=timedelta(seconds=update_seconds),
+        timeout=timeout_seconds
+    )
+
     await coordinator.async_config_entry_first_refresh()
 
     if coordinator.data is None:

@@ -1,25 +1,21 @@
 import logging
 from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .coordinator import create_baillclim_coordinator
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
-    email = entry.data["email"]
-    password = entry.data["password"]
-
-    coordinator = create_baillclim_coordinator(hass, email, password)
-    await coordinator.async_config_entry_first_refresh()
+    coordinator: DataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator.config_entry = entry
 
     if not coordinator.data:
-        _LOGGER.error("❌ Aucune donnée récupérée pour initialiser les sensors.")
+        _LOGGER.error("❌ Aucune donnée récupérée pour initialiser les capteurs.")
         return
 
     entities = [DebugBaillclimSensor(coordinator)]
@@ -80,10 +76,18 @@ class ThermostatTemperatureSensor(CoordinatorEntity, Entity):
                     for th in reg_data.get("thermostats", []):
                         if th.get("id") == self._tid:
                             return th.get("temperature")
-
         except Exception as e:
             _LOGGER.warning(
-                "Erreur récupération température (reg_id=%s, tid=%s) : %s", self._reg_id, self._tid, e
+                "⚠️ Erreur récupération température (reg_id=%s, tid=%s) : %s", self._reg_id, self._tid, e
             )
-
         return None
+
+    @property
+    def device_info(self):
+        return {
+            'identifiers': {(DOMAIN, f'baillclim_reg_{self._reg_id}')},
+            'name': f'BaillClim Régulation {self._reg_id}',
+            'manufacturer': 'BaillConnect',
+            'model': 'Régulation',
+            'entry_type': 'service'
+        }
