@@ -99,5 +99,5 @@ def create_baillclim_coordinator(hass: HomeAssistant, email: str, password: str)
         _LOGGER,
         name="baillclim_data",
         update_method=async_update_data,
-        update_interval=timedelta(seconds=30),
+        update_interval=timedelta(seconds=10),
     )
