@@ -32,19 +32,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     entities = []
 
+    if not coordinator.data:
+        _LOGGER.error("❌ Données absentes du coordinator (data=None). Abandon du setup.")
+        return
+
     data = coordinator.data.get("data", {})
 
-    # Mode multi-régulations
     if isinstance(data, dict) and "regulations" in data:
         for regulation in data["regulations"]:
             reg_id = regulation.get("id")
             if reg_id is not None:
                 entities.append(BaillclimModeSelect(coordinator, email, password, reg_id))
-    # Mode mono-régulation
     elif "id" in data:
         entities.append(BaillclimModeSelect(coordinator, email, password, data["id"]))
     else:
-        _LOGGER.warning("❌ Aucun ID de régulation détecté")
+        _LOGGER.warning("❌ Aucun ID de régulation détecté dans les données : %s", data)
 
     async_add_entities(entities, True)
 
@@ -63,7 +65,10 @@ class BaillclimModeSelect(CoordinatorEntity, SelectEntity):
     @property
     def current_option(self):
         try:
-            # Mode multi
+            if not self.coordinator.data:
+                _LOGGER.warning("current_option: coordinator.data is None")
+                return None
+
             data = self.coordinator.data.get("data", {})
             uc_mode = None
             if "regulations" in data:
@@ -72,7 +77,6 @@ class BaillclimModeSelect(CoordinatorEntity, SelectEntity):
                         uc_mode = reg.get("uc_mode")
                         break
             else:
-                # Mode unique
                 uc_mode = data.get("uc_mode")
 
             reverse_modes = {v: k for k, v in MODES.items()}

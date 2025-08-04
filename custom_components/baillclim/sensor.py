@@ -18,6 +18,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     coordinator = create_baillclim_coordinator(hass, email, password)
     await coordinator.async_config_entry_first_refresh()
 
+    if not coordinator.data:
+        _LOGGER.error("❌ Aucune donnée récupérée pour initialiser les sensors")
+        return
+
     entities = [DebugBaillclimSensor(coordinator)]
 
     thermostats = coordinator.data.get("data", {}).get("thermostats", [])
@@ -57,8 +61,11 @@ class ThermostatTemperatureSensor(CoordinatorEntity, Entity):
 
     @property
     def state(self):
-        thermostats = self.coordinator.data.get("data", {}).get("thermostats", [])
-        for th in thermostats:
-            if th.get("id") == self._tid:
-                return th.get("temperature")
+        try:
+            thermostats = self.coordinator.data.get("data", {}).get("thermostats", [])
+            for th in thermostats:
+                if th.get("id") == self._tid:
+                    return th.get("temperature")
+        except Exception as e:
+            _LOGGER.warning("Erreur récupération température pour thermostat %s : %s", self._tid, e)
         return None

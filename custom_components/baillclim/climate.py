@@ -26,16 +26,20 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
 
     def __init__(self, coordinator, thermostat):
         super().__init__(coordinator)
-        self._id = thermostat["id"]
-        self._name = thermostat["name"].strip()
+        self._id = thermostat.get("id")
+        self._name = thermostat.get("name", f"Thermostat {self._id}").strip()
         self._attr_name = f"Climatiseur {self._name}"
         self._attr_unique_id = f"baillclim_climate_{self._id}"
 
     @property
     def _thermostat_data(self):
-        for t in self.coordinator.data.get("data", {}).get("thermostats", []):
-            if t.get("id") == self._id:
-                return t
+        try:
+            thermostats = self.coordinator.data.get("data", {}).get("thermostats", [])
+            for t in thermostats:
+                if t.get("id") == self._id:
+                    return t
+        except Exception as e:
+            _LOGGER.warning("Erreur lecture thermostat_data : %s", e)
         return {}
 
     @property
@@ -56,18 +60,22 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
 
     @property
     def extra_state_attributes(self):
-        mode = self.coordinator.data.get("data", {}).get("uc_mode", 0)
-        MODES = {
-            0: "Arrêt",
-            1: "Froid",
-            2: "Chauffage",
-            3: "Désumidificateur",
-            4: "Ventilation"
-        }
-        return {
-            "uc_mode": mode,
-            "mode_nom": MODES.get(mode, "Inconnu")
-        }
+        try:
+            mode = self.coordinator.data.get("data", {}).get("uc_mode", 0)
+            MODES = {
+                0: "Arrêt",
+                1: "Froid",
+                2: "Chauffage",
+                3: "Désumidificateur",
+                4: "Ventilation"
+            }
+            return {
+                "uc_mode": mode,
+                "mode_nom": MODES.get(mode, "Inconnu")
+            }
+        except Exception as e:
+            _LOGGER.warning("Erreur extra_state_attributes : %s", e)
+            return {}
 
     async def async_set_hvac_mode(self, hvac_mode):
         is_on = hvac_mode != HVACMode.OFF
@@ -83,42 +91,47 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
 
     async def _set_api_value(self, key, value):
         def sync_send():
-            session = requests.Session()
+            try:
+                session = requests.Session()
+                session.headers.update({"User-Agent": "Mozilla/5.0"})
 
-            # 1. Login
-            login_page = session.get("https://www.baillconnect.com/client/connexion")
-            token = re.search(r'name="_token" value="([^"]+)"', login_page.text).group(1)
-            session.post("https://www.baillconnect.com/client/connexion", data={
-                "_token": token,
-                "email": self.coordinator.config_entry.data["email"],
-                "password": self.coordinator.config_entry.data["password"]
-            })
+                # Login
+                login_page = session.get("https://www.baillconnect.com/client/connexion")
+                token = re.search(r'name="_token" value="([^"]+)"', login_page.text).group(1)
+                session.post("https://www.baillconnect.com/client/connexion", data={
+                    "_token": token,
+                    "email": self.coordinator.config_entry.data["email"],
+                    "password": self.coordinator.config_entry.data["password"]
+                })
 
-            # 2. Lire ID régulation dynamique
-            regulations_id = self.coordinator.data.get("data", {}).get("id")
-            if not regulations_id:
-                raise Exception("❌ regulations_id manquant dans les données")
+                regulations_id = self.coordinator.data.get("data", {}).get("id")
+                if not regulations_id:
+                    raise Exception("❌ regulations_id manquant dans les données")
 
-            regulations_url = f"https://www.baillconnect.com/client/regulations/{regulations_id}"
+                regulations_url = f"https://www.baillconnect.com/client/regulations/{regulations_id}"
+                regulations_page = session.get(regulations_url)
+                csrf = re.search(r'<meta name="csrf-token" content="([^"]+)">', regulations_page.text).group(1)
+                xsrf = urllib.parse.unquote(session.cookies.get("XSRF-TOKEN"))
 
-            # 3. Lire les tokens nécessaires
-            regulations_page = session.get(regulations_url)
-            csrf = re.search(r'<meta name="csrf-token" content="([^"]+)">', regulations_page.text).group(1)
-            xsrf = urllib.parse.unquote(session.cookies.get("XSRF-TOKEN"))
+                session.headers.update({
+                    "Content-Type": "application/json;charset=UTF-8",
+                    "Accept": "application/json, text/plain, */*",
+                    "X-CSRF-TOKEN": csrf,
+                    "X-XSRF-TOKEN": xsrf,
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Origin": "https://www.baillconnect.com",
+                    "Referer": regulations_url
+                })
 
-            # 4. Headers et POST
-            session.headers.update({
-                "Content-Type": "application/json;charset=UTF-8",
-                "Accept": "application/json, text/plain, */*",
-                "X-CSRF-TOKEN": csrf,
-                "X-XSRF-TOKEN": xsrf,
-                "X-Requested-With": "XMLHttpRequest",
-                "Origin": "https://www.baillconnect.com",
-                "Referer": regulations_url
-            })
+                url = f"https://www.baillconnect.com/api-client/regulations/{regulations_id}"
+                response = session.post(url, json={key: value})
 
-            url = f"https://www.baillconnect.com/api-client/regulations/{regulations_id}"
-            session.post(url, json={key: value})
+                if response.status_code == 200:
+                    _LOGGER.info("✅ Requête API réussie : %s = %s", key, value)
+                else:
+                    _LOGGER.warning("❌ Échec requête API (%s = %s) : %s", key, value, response.text)
+            except Exception as e:
+                _LOGGER.error("Erreur dans _set_api_value : %s", e)
 
         await self.hass.async_add_executor_job(sync_send)
 
@@ -127,6 +140,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     coordinator = create_baillclim_coordinator(hass, entry.data["email"], entry.data["password"])
     coordinator.config_entry = entry
     await coordinator.async_config_entry_first_refresh()
+
+    if not coordinator.data:
+        _LOGGER.error("❌ Données absentes du coordinator (data=None). Abandon du setup climate.")
+        return
 
     entities = []
     thermostats = coordinator.data.get("data", {}).get("thermostats", [])

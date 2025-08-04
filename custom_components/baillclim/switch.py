@@ -24,6 +24,7 @@ class ZoneSwitch(CoordinatorEntity, SwitchEntity):
         self._password = password
         self._attr_name = f"Zone {self._name} Active"
         self._attr_unique_id = f"baillclim_zone_{self._id}"
+        self._attr_icon = "mdi:vector-polyline"
 
     @property
     def unique_id(self):
@@ -31,30 +32,25 @@ class ZoneSwitch(CoordinatorEntity, SwitchEntity):
 
     @property
     def is_on(self):
-        zones = self.coordinator.data.get("data", {}).get("zones", [])
-        for zone in zones:
-            if zone.get("id") == self._id:
-                return zone.get("mode") == 3
+        try:
+            zones = self.coordinator.data.get("data", {}).get("zones", [])
+            for zone in zones:
+                if zone.get("id") == self._id:
+                    return zone.get("mode") == 3
+        except Exception as e:
+            _LOGGER.warning("Erreur accès is_on pour zone %s : %s", self._id, e)
         return False
-
-    # Méthode supprimée : plus de regroupement appareil
-        return {
-            "identifiers": {(DOMAIN, f"zone_{self._id}")},
-            "name": f"Zone {self._name}",
-            "manufacturer": "BaillConnect",
-            "model": "Zone programmable"
-        }
 
     def _set_zone_mode(self, value: int):
         try:
             regulations_id = self.coordinator.data.get("data", {}).get("id")
             if not regulations_id:
-                raise Exception("❌ regulations_id manquant dans le coordinator")
+                raise Exception("❌ regulations_id manquant dans les données du coordinator")
 
             session = requests.Session()
             session.headers.update({"User-Agent": "Mozilla/5.0"})
 
-            # 🔑 Login
+            # 🔑 Connexion
             login_page = session.get("https://www.baillconnect.com/client/connexion")
             token = re.search(r'name="_token" value="([^"]+)"', login_page.text).group(1)
             session.post("https://www.baillconnect.com/client/connexion", data={
@@ -63,7 +59,7 @@ class ZoneSwitch(CoordinatorEntity, SwitchEntity):
                 "password": self._password
             })
 
-            # 🔄 Tokens sécurisés
+            # 🔐 Récupération des tokens sécurisés
             regulations_url = f"https://www.baillconnect.com/client/regulations/{regulations_id}"
             regulations_page = session.get(regulations_url)
             csrf_token = re.search(r'<meta name="csrf-token" content="([^"]+)">', regulations_page.text).group(1)
@@ -79,7 +75,6 @@ class ZoneSwitch(CoordinatorEntity, SwitchEntity):
                 "Referer": regulations_url
             })
 
-            # ✅ Changement d’état
             url = f"https://www.baillconnect.com/api-client/regulations/{regulations_id}"
             payload = {f"zones.{self._id}.mode": value}
             response = session.post(url, json=payload)
@@ -90,17 +85,15 @@ class ZoneSwitch(CoordinatorEntity, SwitchEntity):
                 _LOGGER.warning("❌ Échec changement zone %s : %s", self._id, response.text)
 
         except Exception as e:
-            _LOGGER.error("Erreur API zone %s : %s", self._id, e)
+            _LOGGER.error("❌ Erreur lors du changement d'état de la zone %s : %s", self._id, e)
 
     async def async_turn_on(self, **kwargs):
         await self.hass.async_add_executor_job(self._set_zone_mode, 3)
         await self.coordinator.async_request_refresh()
-        self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs):
         await self.hass.async_add_executor_job(self._set_zone_mode, 0)
         await self.coordinator.async_request_refresh()
-        self.async_write_ha_state()
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
@@ -109,6 +102,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     coordinator = create_baillclim_coordinator(hass, email, password)
     await coordinator.async_config_entry_first_refresh()
+
+    if not coordinator.data:
+        _LOGGER.error("❌ Données manquantes : impossible de configurer les zones")
+        return
 
     entities = []
     zones = coordinator.data.get("data", {}).get("zones", [])
