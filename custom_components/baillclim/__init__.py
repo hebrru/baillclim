@@ -1,5 +1,3 @@
-"""BaillClim - Intégration BaillConnect pour Home Assistant."""
-
 import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -28,6 +26,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if coordinator.data is None:
         _LOGGER.error("❌ Les données du coordinator sont vides. Abandon du setup.")
+        return False
+
+    data = coordinator.data.get("data", {})
+
+    if not isinstance(data, dict):
+        _LOGGER.error(
+            "❌ Format inattendu pour coordinator.data['data'] : type=%s, contenu=%s",
+            type(data), data
+        )
+        return False
+
+    if "regulations" in data and not isinstance(data["regulations"], list):
+        _LOGGER.error(
+            "❌ 'regulations' devrait être une liste. Contenu : %s",
+            data["regulations"]
+        )
         return False
 
     hass.data.setdefault(DOMAIN, {})

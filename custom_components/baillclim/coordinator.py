@@ -1,94 +1,50 @@
 import logging
-import re
-import urllib.parse
-import requests
-import time  # ✅ Ajout ici
-
+import re  # ✅ Import nécessaire
 from datetime import timedelta
 from requests.exceptions import RequestException, ConnectionError
+
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, LOGIN_URL
+from .const import DOMAIN
+from .utils import create_authenticated_session
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def get_authenticated_session(email, password):
-    session = requests.Session()
-
-    # 1. Page de login → récupération token CSRF
-    login_page = session.get(LOGIN_URL)
-    token_match = re.search(r'name="_token" value="([^"]+)"', login_page.text)
-    if not token_match:
-        raise Exception("Token _token introuvable")
-    login_token = token_match.group(1)
-
-    # 2. Connexion
-    login_response = session.post(LOGIN_URL, data={
-        "_token": login_token,
-        "email": email,
-        "password": password
-    }, allow_redirects=True)
-
-    if login_response.status_code not in (200, 302):
-        raise Exception(f"Erreur login : {login_response.status_code}")
-    if "client/connexion" in login_response.url:
-        raise Exception("Login échoué")
-
-    # 3. Récupération de l’ID de régulation
-    match = re.search(r"/client/regulations/(\d+)", login_response.url)
-    if not match:
-        raise Exception("Impossible de trouver regulations_id dans l'URL de redirection après login")
-    regulations_id = match.group(1)
-    regulations_url = f"https://www.baillconnect.com/client/regulations/{regulations_id}"
-    command_url = f"https://www.baillconnect.com/api-client/regulations/{regulations_id}"
-
-    # 4. Page de régulation → récupération CSRF token
-    regulations_page = session.get(regulations_url)
-    token_csrf_match = re.search(r'<meta name="csrf-token" content="([^"]+)">', regulations_page.text)
-    if not token_csrf_match:
-        raise Exception("Token CSRF non trouvé")
-    x_csrf_token = token_csrf_match.group(1)
-
-    # 5. Cookie XSRF
-    xsrf_token_cookie = session.cookies.get("XSRF-TOKEN")
-    if not xsrf_token_cookie:
-        raise Exception("Cookie XSRF-TOKEN manquant")
-    x_xsrf_token = urllib.parse.unquote(xsrf_token_cookie)
-
-    # 6. Headers obligatoires
-    session.headers.update({
-        "Content-Type": "application/json;charset=UTF-8",
-        "Accept": "application/json, text/plain, */*",
-        "X-CSRF-TOKEN": x_csrf_token,
-        "X-XSRF-TOKEN": x_xsrf_token,
-        "X-Requested-With": "XMLHttpRequest",
-        "Origin": "https://www.baillconnect.com",
-        "Referer": regulations_url
-    })
-
-    return session, regulations_id, command_url
 
 
 def create_baillclim_coordinator(hass: HomeAssistant, email: str, password: str):
     async def async_update_data():
         try:
             def sync_fetch():
-                session, regulations_id, command_url = get_authenticated_session(email, password)
+                regulations = []
 
-                time.sleep(1)  # ✅ Pause pour stabilité session avant POST
+                # 🔐 Connexion initiale (récupération de la page listant les régulations)
+                session = create_authenticated_session(email, password, 0)
+                reg_list_page = session.get("https://www.baillconnect.com/client/regulations", timeout=10)
 
-                try:
-                    response = session.post(command_url, json={}, timeout=10)
-                    response.raise_for_status()
-                except (ConnectionError, RequestException) as e:
-                    raise Exception(f"Erreur lors de l'appel POST : {e}")
+                # 🔍 Recherche des IDs de régulations via regex
+                reg_ids = set(re.findall(r"/client/regulations/(\d+)", reg_list_page.text))
+                if not reg_ids:
+                    raise Exception("❌ Aucune régulation détectée dans la page de liste.")
 
-                _LOGGER.debug("📥 Données JSON reçues : %s", response.text)
-                data = response.json()
-                data["id"] = regulations_id
-                return data
+                for reg_id in reg_ids:
+                    try:
+                        session = create_authenticated_session(email, password, reg_id)
+                        url = f"https://www.baillconnect.com/api-client/regulations/{reg_id}"
+                        response = session.post(url, json={}, timeout=10)
+                        response.raise_for_status()
+                        data = response.json()
+                        data["id"] = int(reg_id)  # 🔧 ID injecté si absent
+                        regulations.append(data)
+                    except (ConnectionError, RequestException) as e:
+                        _LOGGER.warning("⚠️ Erreur POST pour régulation %s : %s", reg_id, e)
+                    except Exception as e:
+                        _LOGGER.error("❌ Erreur récupération régulation %s : %s", reg_id, e)
+
+                if not regulations:
+                    raise Exception("❌ Aucune régulation récupérée correctement.")
+
+                return {"data": {"regulations": regulations}}
 
             return await hass.async_add_executor_job(sync_fetch)
 
