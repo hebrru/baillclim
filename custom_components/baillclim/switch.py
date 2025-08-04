@@ -10,7 +10,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .coordinator import create_baillclim_coordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,11 +33,14 @@ class ZoneSwitch(CoordinatorEntity, SwitchEntity):
     def is_on(self):
         try:
             zones = self.coordinator.data.get("data", {}).get("zones", [])
+            if not isinstance(zones, list):
+                _LOGGER.warning("⚠️ Données 'zones' absentes ou invalides pour zone %s", self._id)
+                return False
             for zone in zones:
                 if zone.get("id") == self._id:
                     return zone.get("mode") == 3
         except Exception as e:
-            _LOGGER.warning("Erreur accès is_on pour zone %s : %s", self._id, e)
+            _LOGGER.warning("❌ Erreur accès is_on pour zone %s : %s", self._id, e)
         return False
 
     def _set_zone_mode(self, value: int):
@@ -97,11 +99,9 @@ class ZoneSwitch(CoordinatorEntity, SwitchEntity):
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
+    coordinator = hass.data[DOMAIN][entry.entry_id]
     email = entry.data["email"]
     password = entry.data["password"]
-
-    coordinator = create_baillclim_coordinator(hass, email, password)
-    await coordinator.async_config_entry_first_refresh()
 
     if not coordinator.data:
         _LOGGER.error("❌ Données manquantes : impossible de configurer les zones")

@@ -1,9 +1,13 @@
 """BaillClim - Intégration BaillConnect pour Home Assistant."""
 
+import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-DOMAIN = "baillclim"
+from .const import DOMAIN
+from .coordinator import create_baillclim_coordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup(hass: HomeAssistant, config: dict):
@@ -13,8 +17,22 @@ async def async_setup(hass: HomeAssistant, config: dict):
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up BaillClim from a config entry."""
+
+    email = entry.data["email"]
+    password = entry.data["password"]
+
+    coordinator = create_baillclim_coordinator(hass, email, password)
+
+    # Appel initial pour récupérer les données
+    await coordinator.async_config_entry_first_refresh()
+
+    if coordinator.data is None:
+        _LOGGER.error("❌ Les données du coordinator sont vides. Abandon du setup.")
+        return False
+
     hass.data.setdefault(DOMAIN, {})
-    
+    hass.data[DOMAIN][entry.entry_id] = coordinator
+
     await hass.config_entries.async_forward_entry_setups(entry, [
         "sensor",
         "climate",

@@ -2,6 +2,7 @@ import logging
 import re
 import urllib.parse
 import requests
+import time  # ✅ Ajout ici
 
 from datetime import timedelta
 from requests.exceptions import RequestException, ConnectionError
@@ -76,9 +77,10 @@ def create_baillclim_coordinator(hass: HomeAssistant, email: str, password: str)
             def sync_fetch():
                 session, regulations_id, command_url = get_authenticated_session(email, password)
 
+                time.sleep(1)  # ✅ Pause pour stabilité session avant POST
+
                 try:
-                    # ✅ Important : envoie un JSON vide pour éviter les erreurs
-                    response = session.post(command_url, json={})
+                    response = session.post(command_url, json={}, timeout=10)
                     response.raise_for_status()
                 except (ConnectionError, RequestException) as e:
                     raise Exception(f"Erreur lors de l'appel POST : {e}")
@@ -99,5 +101,5 @@ def create_baillclim_coordinator(hass: HomeAssistant, email: str, password: str)
         _LOGGER,
         name="baillclim_data",
         update_method=async_update_data,
-        update_interval=timedelta(seconds=20),
+        update_interval=timedelta(seconds=30),
     )
