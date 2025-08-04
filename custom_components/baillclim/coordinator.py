@@ -11,6 +11,7 @@ from .const import DOMAIN, LOGIN_URL
 
 _LOGGER = logging.getLogger(__name__)
 
+
 def get_authenticated_session(email, password):
     session = requests.Session()
 
@@ -67,16 +68,19 @@ def get_authenticated_session(email, password):
 
     return session, regulations_id, command_url
 
+
 def create_baillclim_coordinator(hass: HomeAssistant, email: str, password: str):
     async def async_update_data():
         try:
             def sync_fetch():
                 session, regulations_id, command_url = get_authenticated_session(email, password)
-                response = session.post(command_url)
-                _LOGGER.debug("📥 Données JSON reçues : %s", response.text)
+                response = session.post(command_url, timeout=10)
+                if response.status_code != 200:
+                    raise Exception(f"Code retour API : {response.status_code}")
                 data = response.json()
                 data["id"] = regulations_id  # Injecte l'ID pour réutilisation dans les entités
                 return data
+
             return await hass.async_add_executor_job(sync_fetch)
 
         except Exception as err:
