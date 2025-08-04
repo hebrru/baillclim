@@ -1,50 +1,40 @@
+# 🌡️ BaillClim – Intégration BaillConnect pour Home Assistant
 
-# 🌡️ BaillClim – Intégration BaillConnect pour Home Assistant (v5.0.0)
-![HACS](https://img.shields.io/badge/HACS-gray?style=for-the-badge) ![CUSTOM](https://img.shields.io/badge/CUSTOM-blue?style=for-the-badge) ![RELEASE](https://img.shields.io/badge/RELEASE-green?style=for-the-badge) ![VERSION](https://img.shields.io/badge/V5.0.0-blue?style=for-the-badge)
-
-Développé par [@hebrru](https://github.com/hebrru)
-
-<a href="https://www.buymeacoffee.com/herbru01d" target="_blank">
-  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" >
-</a>
+[![HACS](https://img.shields.io/badge/HACS-gray?style=for-the-badge)](https://hacs.xyz)
+[![CUSTOM](https://img.shields.io/badge/CUSTOM-blue?style=for-the-badge)](https://github.com/hebrru/baillclim)
+[![RELEASE](https://img.shields.io/badge/RELEASE-latest?style=for-the-badge)](https://github.com/hebrru/baillclim/releases)
 
 ---
 
 ## 🔧 Description
 
-**BaillClim** est une intégration personnalisée pour **Home Assistant** permettant de piloter vos thermostats connectés via le portail **BaillConnect** (baillconnect.com).
+**BaillClim** est une intégration personnalisée pour **Home Assistant** permettant de piloter vos thermostats et zones via le portail **BaillConnect** (https://www.baillconnect.com).
 
----
+### Entités créées automatiquement
 
-## 🆕 Nouveautés de la version 5.0.0
-
-✅ Intégration entièrement réécrite et stabilisée  
-✅ Entités climate complètes (on/off, température, mode)  
-✅ Affichage dynamique des consignes froides / chaudes  
-✅ Sélecteur de mode UC (Arrêt, Froid, Chauffage, Ventilation, Déshumidificateur)  
-✅ Capteur de température pour chaque thermostat  
-✅ Switch de contrôle ON/OFF pour chaque zone active  
-✅ Capteur debug contenant toutes les données brutes  
-✅ Aucun identifiant dur : détection dynamique de tous les thermostats et zones
+| Type      | Entité                                | Description                                                  |
+|-----------|----------------------------------------|--------------------------------------------------------------|
+| `climate` | `climate.baillclim_XXX`                | Thermostats avec on/off, consignes froid/chaud, température |
+| `sensor`  | `sensor.baillclim_temp_XXX`            | Température actuelle de chaque thermostat                   |
+| `select`  | `select.mode_climatisation_XXX`        | Mode global (Arrêt, Froid, Chauffage, etc.)                 |
+| `switch`  | `switch.zone_XXX_active`               | Activation ON/OFF de chaque zone                            |
+| `sensor`  | `sensor.debug_baillconnect_data`       | Données JSON brutes pour debug                              |
 
 ---
 
 ## 🚀 Installation via HACS
 
-1. Ajouter le dépôt personnalisé :
-
-```
-https://github.com/hebrru/baillclim
-```
+1. Ajoutez le dépôt :  
+   `https://github.com/hebrru/baillclim`
 
 2. HACS → Intégrations → (⋮) → Dépôts personnalisés  
-3. Choisir la catégorie : `Intégration`  
-4. Installer l’intégration  
-5. Redémarrer Home Assistant  
-6. Aller dans : `Paramètres → Appareils & Services → Ajouter une intégration`  
-7. Rechercher **BaillClim**, puis entrer :  
-   - Email BaillConnect  
-   - Mot de passe BaillConnect
+   Choisir **Intégration** et coller l’URL.
+
+3. Recherchez "BaillClim", installez et redémarrez Home Assistant.
+
+4. Allez dans **Paramètres → Appareils & Services → Ajouter une intégration**
+
+5. Recherchez **BaillClim** et entrez vos identifiants BaillConnect.
 
 ---
 
@@ -58,7 +48,7 @@ trigger:
 action:
   - service: select.select_option
     data:
-      entity_id: select.mode_climatisation
+      entity_id: select.mode_climatisation_270
       option: Ventilation
 ```
 
@@ -66,12 +56,11 @@ action:
 
 ## 🧠 Suggestions / Bugs / Améliorations
 
-👉 [Créer une issue GitHub](https://github.com/hebrru/baillclim/issues)
+👉 Créez une issue sur [GitHub](https://github.com/hebrru/baillclim/issues)
 
 ---
 
 ## 👤 Auteur
 
-**Hervé G.**  
-GitHub : [hebrru](https://github.com/hebrru)  
+Hervé G. – [@hebrru](https://github.com/hebrru)  
 ☕ [Buy Me A Coffee](https://www.buymeacoffee.com/herbru01d)
