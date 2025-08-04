@@ -1,46 +1,81 @@
-# 🌡️ BaillClim – Intégration BaillConnect pour Home Assistant
+🌡️ BaillClim – Intégration BaillConnect pour Home Assistant
+HACS CUSTOM RELEASE
+Développé par @hebrru
+☕ Buy Me A Coffee
 
-[![HACS](https://img.shields.io/badge/HACS-gray?style=for-the-badge)](https://hacs.xyz)
-[![CUSTOM](https://img.shields.io/badge/CUSTOM-blue?style=for-the-badge)](https://github.com/hebrru/baillclim)
-[![RELEASE](https://img.shields.io/badge/RELEASE-latest?style=for-the-badge)](https://github.com/hebrru/baillclim/releases)
+🔧 Description
+BaillClim est une intégration personnalisée pour Home Assistant, permettant de piloter vos thermostats connectés via le portail baillconnect.com. Elle offre un contrôle complet de votre système de climatisation gainable, pièce par pièce, zone par zone, et prend en charge plusieurs passerelles ou régulations.
 
----
+🧩 Entités disponibles
+L’intégration crée automatiquement les entités suivantes en fonction des données disponibles dans votre compte :
 
-## 🔧 Description
+🔥 climate.baillclim_*
+Thermostats BaillConnect avec les fonctionnalités :
 
-**BaillClim** est une intégration personnalisée pour **Home Assistant** permettant de piloter vos thermostats et zones via le portail **BaillConnect** (https://www.baillconnect.com).
+🟢 Allumage/extinction
 
-### Entités créées automatiquement
+🌡️ Température ambiante
 
-| Type      | Entité                                | Description                                                  |
-|-----------|----------------------------------------|--------------------------------------------------------------|
-| `climate` | `climate.baillclim_XXX`                | Thermostats avec on/off, consignes froid/chaud, température |
-| `sensor`  | `sensor.baillclim_temp_XXX`            | Température actuelle de chaque thermostat                   |
-| `select`  | `select.mode_climatisation_XXX`        | Mode global (Arrêt, Froid, Chauffage, etc.)                 |
-| `switch`  | `switch.zone_XXX_active`               | Activation ON/OFF de chaque zone                            |
-| `sensor`  | `sensor.debug_baillconnect_data`       | Données JSON brutes pour debug                              |
+❄️ Consigne froide (gauche)
 
----
+🔥 Consigne chaude (droite)
 
-## 🚀 Installation via HACS
+🔄 Mode AUTO ou OFF (dépend de l’état réel)
 
-1. Ajoutez le dépôt :  
-   `https://github.com/hebrru/baillclim`
+🌀 select.mode_climatisation
+Contrôle du mode général de fonctionnement du système :
 
-2. HACS → Intégrations → (⋮) → Dépôts personnalisés  
-   Choisir **Intégration** et coller l’URL.
+Arrêt, Froid, Chauffage, Désumidificateur, Ventilation
 
-3. Recherchez "BaillClim", installez et redémarrez Home Assistant.
+🌡️ sensor.baillclim_temp_*
+Capteurs de température ambiante pour chaque thermostat, lisibles séparément.
 
-4. Allez dans **Paramètres → Appareils & Services → Ajouter une intégration**
+💡 switch.zone_*_active
+Permet d’activer ou désactiver une zone programmée :
 
-5. Recherchez **BaillClim** et entrez vos identifiants BaillConnect.
+Positionne la zone en mode actif (mode: 3) ou inactif (mode: 0)
 
----
+🐞 sensor.debug_baillconnect_data
+Capteur spécial contenant l'intégralité des données JSON brutes retournées par l'API :
 
-## 🛠️ Exemple d’automatisation YAML
+Très utile pour le debug, ou pour les utilisateurs avancés souhaitant extraire d'autres données.
 
-```yaml
+🧠 Points forts
+✅ Détection automatique des thermostats, zones et régulations
+✅ Aucune configuration manuelle des ID
+✅ Prise en charge de plusieurs régulations sur le même compte
+✅ Préparation pour un multi-compte / multi-passerelle
+✅ Entièrement compatible Lovelace
+✅ Fonctionne sans dépendance cloud tierce, uniquement via le site BaillConnect
+
+🚀 Installation via HACS
+Ajouter ce dépôt personnalisé :
+
+arduino
+Copier
+Modifier
+https://github.com/hebrru/baillclim
+Dans HACS :
+
+HACS → Intégrations → (⋮) → Dépôts personnalisés
+
+Catégorie : Intégration
+
+Installer BaillClim
+
+Redémarrer Home Assistant
+
+Aller dans :
+Paramètres → Appareils & Services → Ajouter une intégration
+
+Rechercher BaillClim
+
+Entrer votre email et mot de passe BaillConnect
+
+🛠️ Exemple d’automatisation YAML
+yaml
+Copier
+Modifier
 alias: "Changer mode clim vers Ventilation"
 trigger:
   - platform: time
@@ -48,19 +83,12 @@ trigger:
 action:
   - service: select.select_option
     data:
-      entity_id: select.mode_climatisation_270
+      entity_id: select.mode_climatisation
       option: Ventilation
-```
+🧠 Suggestions / Bugs / Améliorations
+👉 Créez une issue GitHub pour proposer une idée ou signaler un problème.
 
----
-
-## 🧠 Suggestions / Bugs / Améliorations
-
-👉 Créez une issue sur [GitHub](https://github.com/hebrru/baillclim/issues)
-
----
-
-## 👤 Auteur
-
-Hervé G. – [@hebrru](https://github.com/hebrru)  
-☕ [Buy Me A Coffee](https://www.buymeacoffee.com/herbru01d)
+👤 Auteur
+Hervé G.
+GitHub : hebrru
+☕ Buy Me A Coffee
