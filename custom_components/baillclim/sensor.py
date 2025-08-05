@@ -19,7 +19,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         return
 
     entities = [DebugBaillclimSensor(coordinator)]
-
     data = coordinator.data.get("data", {})
 
     if isinstance(data, dict):
@@ -77,9 +76,7 @@ class ThermostatTemperatureSensor(CoordinatorEntity, Entity):
                         if th.get("id") == self._tid:
                             return th.get("temperature")
         except Exception as e:
-            _LOGGER.warning(
-                "⚠️ Erreur récupération température (reg_id=%s, tid=%s) : %s", self._reg_id, self._tid, e
-            )
+            _LOGGER.warning("⚠️ Erreur récupération température (reg_id=%s, tid=%s) : %s", self._reg_id, self._tid, e)
         return None
 
     @property

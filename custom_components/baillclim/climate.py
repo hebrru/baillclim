@@ -8,7 +8,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .utils import create_authenticated_session
+from .session_manager import SessionManager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,12 +49,12 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
         return HVACMode.AUTO if self._thermostat_data.get("is_on") else HVACMode.OFF
 
     @property
-    def target_temperature_high(self):
-        return self._thermostat_data.get("setpoint_cool_t1")
+    def target_temperature_low(self):
+        return self._thermostat_data.get("setpoint_hot_t1")  # 🔥 CHAUD → droite
 
     @property
-    def target_temperature_low(self):
-        return self._thermostat_data.get("setpoint_hot_t1")
+    def target_temperature_high(self):
+        return self._thermostat_data.get("setpoint_cool_t1")  # ❄️ FROID → gauche
 
     @property
     def current_temperature(self):
@@ -99,20 +99,21 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
         await self.coordinator.async_request_refresh()
 
     async def async_set_temperature(self, **kwargs):
-        if "target_temp_high" in kwargs:
-            await self._set_api_value(f"thermostats.{self._id}.setpoint_cool_t1", kwargs["target_temp_high"])
         if "target_temp_low" in kwargs:
             await self._set_api_value(f"thermostats.{self._id}.setpoint_hot_t1", kwargs["target_temp_low"])
+        if "target_temp_high" in kwargs:
+            await self._set_api_value(f"thermostats.{self._id}.setpoint_cool_t1", kwargs["target_temp_high"])
         await self.coordinator.async_request_refresh()
 
     async def _set_api_value(self, key, value):
         def sync_send():
             try:
-                session = create_authenticated_session(
-                    email=self.coordinator.config_entry.data["email"],
-                    password=self.coordinator.config_entry.data["password"],
+                SessionManager.initialize(
+                    self.coordinator.config_entry.data["email"],
+                    self.coordinator.config_entry.data["password"],
                     reg_id=self._reg_id
                 )
+                session = SessionManager.get_session()
                 url = f"https://www.baillconnect.com/api-client/regulations/{self._reg_id}"
                 response = session.post(url, json={key: value}, timeout=10)
 

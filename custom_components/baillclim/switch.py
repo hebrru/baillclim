@@ -6,19 +6,17 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpda
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .utils import create_authenticated_session
+from .session_manager import SessionManager
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class ZoneSwitch(CoordinatorEntity, SwitchEntity):
-    def __init__(self, coordinator: DataUpdateCoordinator, reg_id: int, zone_id: int, zone_name: str, email: str, password: str):
+    def __init__(self, coordinator: DataUpdateCoordinator, reg_id: int, zone_id: int, zone_name: str):
         super().__init__(coordinator)
         self._reg_id = reg_id
         self._zone_id = zone_id
         self._zone_name = zone_name or f"Zone {zone_id}"
-        self._email = email
-        self._password = password
 
         self._attr_name = f"Zone {self._zone_name.strip()} Active"
         self._attr_unique_id = f"baillclim_zone_{self._reg_id}_{self._zone_id}"
@@ -40,11 +38,12 @@ class ZoneSwitch(CoordinatorEntity, SwitchEntity):
 
     def _set_zone_mode(self, value: int):
         try:
-            session = create_authenticated_session(
-                email=self._email,
-                password=self._password,
+            SessionManager.initialize(
+                self.coordinator.config_entry.data["email"],
+                self.coordinator.config_entry.data["password"],
                 reg_id=self._reg_id
             )
+            session = SessionManager.get_session()
             url = f"https://www.baillconnect.com/api-client/regulations/{self._reg_id}"
             payload = {f"zones.{self._zone_id}.mode": value}
             response = session.post(url, json=payload, timeout=10)
@@ -54,7 +53,7 @@ class ZoneSwitch(CoordinatorEntity, SwitchEntity):
             else:
                 _LOGGER.warning("❌ Échec requête API zone %s : %s", self._zone_id, response.text)
         except Exception as e:
-            _LOGGER.error("❌ Erreur envoi changement zone %s (reg %s) : %s", self._zone_id, self._reg_id, e)
+            _LOGGER.debug(f"⏱️ Données zone manquantes, retry... zone_id={self._zone_id}, reg_id={self._reg_id}, erreur={e}")
 
     async def async_turn_on(self, **kwargs):
         await self.hass.async_add_executor_job(self._set_zone_mode, 3)
@@ -77,11 +76,9 @@ class ZoneSwitch(CoordinatorEntity, SwitchEntity):
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
     coordinator: DataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
-    email = entry.data["email"]
-    password = entry.data["password"]
 
     if not coordinator.data:
-        _LOGGER.error("❌ Données manquantes : impossible de configurer les zones.")
+        _LOGGER.debug("⏱️ Données zone manquantes, retry...")
         return
 
     entities = []
@@ -98,7 +95,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             name = zone.get("name", f"Zone {zone_id}")
             if zone_id is not None:
                 entities.append(
-                    ZoneSwitch(coordinator, reg_id, zone_id, name.strip(), email, password)
+                    ZoneSwitch(coordinator, reg_id, zone_id, name.strip())
                 )
 
     async_add_entities(entities)
