@@ -8,5 +8,5 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/hebrru/baillclim/issues",
   "requirements": [],
-  "version": "5.0.5"
+  "version": "5.0.7"
 }
