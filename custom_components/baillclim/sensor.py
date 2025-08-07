@@ -35,6 +35,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             name = th.get("name", f"Thermostat {tid}" if tid else "Inconnu").strip()
             if tid is not None:
                 entities.append(ThermostatTemperatureSensor(coordinator, reg_id, tid, name))
+                entities.append(ThermostatBatteryLowSensor(coordinator, reg_id, tid, name))
 
     async_add_entities(entities)
 
@@ -78,6 +79,43 @@ class ThermostatTemperatureSensor(CoordinatorEntity, Entity):
         except Exception as e:
             _LOGGER.warning("⚠️ Erreur récupération température (reg_id=%s, tid=%s) : %s", self._reg_id, self._tid, e)
         return None
+
+    @property
+    def device_info(self):
+        return {
+            'identifiers': {(DOMAIN, f'baillclim_reg_{self._reg_id}')},
+            'name': f'BaillClim Régulation {self._reg_id}',
+            'manufacturer': 'BaillConnect',
+            'model': 'Régulation',
+            'entry_type': 'service'
+        }
+
+
+class ThermostatBatteryLowSensor(CoordinatorEntity, Entity):
+    def __init__(self, coordinator, reg_id, tid, name):
+        super().__init__(coordinator)
+        self._reg_id = reg_id
+        self._tid = tid
+        self._name = name
+        self._attr_name = f"Batterie faible {name}"
+        self._attr_unique_id = f"baillclim_battery_low_{reg_id}_{tid}"
+        self._attr_icon = "mdi:battery-alert"
+        self._attr_device_class = "battery"
+
+    @property
+    def state(self):
+        try:
+            data = self.coordinator.data.get("data", {})
+            for reg in data.get("regulations", []):
+                reg_data = reg.get("data", {}).get("data", {})
+                if reg_data.get("id") == self._reg_id:
+                    for th in reg_data.get("thermostats", []):
+                        if th.get("id") == self._tid:
+                            is_low = th.get("is_battery_low", False)
+                            return "Batterie à changer" if is_low else "Batterie OK"
+        except Exception as e:
+            _LOGGER.warning("⚠️ Erreur récupération batterie (reg_id=%s, tid=%s) : %s", self._reg_id, self._tid, e)
+        return "Inconnu"
 
     @property
     def device_info(self):
