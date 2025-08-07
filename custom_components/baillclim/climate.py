@@ -33,7 +33,7 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
         try:
             data = self.coordinator.data.get("data", {})
             for reg in data.get("regulations", []):
-                reg_data = reg.get("data", {})
+                reg_data = reg.get("data", {}).get("data", {})
                 if reg_data.get("id") == self._reg_id:
                     for t in reg_data.get("thermostats", []):
                         if t.get("id") == self._id:
@@ -44,17 +44,15 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
 
     @property
     def hvac_mode(self):
-        if self._thermostat_data.get("is_on") is None:
-            return HVACMode.OFF
         return HVACMode.AUTO if self._thermostat_data.get("is_on") else HVACMode.OFF
 
     @property
     def target_temperature_low(self):
-        return self._thermostat_data.get("setpoint_hot_t1")  # 🔥 CHAUD → droite
+        return self._thermostat_data.get("setpoint_hot_t1")
 
     @property
     def target_temperature_high(self):
-        return self._thermostat_data.get("setpoint_cool_t1")  # ❄️ FROID → gauche
+        return self._thermostat_data.get("setpoint_cool_t1")
 
     @property
     def current_temperature(self):
@@ -65,7 +63,7 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
         try:
             data = self.coordinator.data.get("data", {})
             for reg in data.get("regulations", []):
-                reg_data = reg.get("data", {})
+                reg_data = reg.get("data", {}).get("data", {})
                 if reg_data.get("id") == self._reg_id:
                     mode = reg_data.get("uc_mode", 0)
                     MODES = {
@@ -106,25 +104,27 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
         await self.coordinator.async_request_refresh()
 
     async def _set_api_value(self, key, value):
-        def sync_send():
+        await SessionManager.async_initialize(
+            self.hass,
+            self.coordinator.config_entry.data["email"],
+            self.coordinator.config_entry.data["password"],
+            reg_id=self._reg_id
+        )
+        session = await SessionManager.async_get_session(self.hass)
+        url = f"https://www.baillconnect.com/api-client/regulations/{self._reg_id}"
+        payload = {key: value}
+
+        def send():
             try:
-                SessionManager.initialize(
-                    self.coordinator.config_entry.data["email"],
-                    self.coordinator.config_entry.data["password"],
-                    reg_id=self._reg_id
-                )
-                session = SessionManager.get_session()
-                url = f"https://www.baillconnect.com/api-client/regulations/{self._reg_id}"
-                response = session.post(url, json={key: value}, timeout=10)
-
+                response = session.post(url, json=payload, timeout=10)
                 if response.status_code == 200:
-                    _LOGGER.info("✅ Requête API réussie : %s = %s", key, value)
+                    _LOGGER.info("✅ API OK : %s = %s", key, value)
                 else:
-                    _LOGGER.warning("❌ Échec requête API (%s = %s) : %s", key, value, response.text)
+                    _LOGGER.warning("❌ API ERROR (%s = %s) : %s", key, value, response.text)
             except Exception as e:
-                _LOGGER.error("Erreur dans _set_api_value : %s", e)
+                _LOGGER.error("Erreur requête API %s : %s", key, e)
 
-        await self.hass.async_add_executor_job(sync_send)
+        await self.hass.async_add_executor_job(send)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
@@ -132,7 +132,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     coordinator.config_entry = entry
 
     if not coordinator.data:
-        _LOGGER.error("❌ coordinator.data est vide.")
+        _LOGGER.error("❌ Données manquantes dans le coordinator.")
         return
 
     data = coordinator.data.get("data", {})
@@ -140,7 +140,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     entities = []
     for reg in regulations:
-        reg_data = reg.get("data", {})
+        reg_data = reg.get("data", {}).get("data", {})
         reg_id = reg_data.get("id")
         if reg_id is None:
             continue

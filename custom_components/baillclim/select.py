@@ -21,7 +21,6 @@ MODES = {
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
     coordinator: DataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
-    coordinator.config_entry = entry
 
     if not coordinator.data:
         _LOGGER.debug("⏱️ Données mode manquantes, retry...")
@@ -35,10 +34,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     entities = []
 
     for reg in data.get("regulations", []):
-        reg_data = reg.get("data", {})
+        reg_data = reg.get("data", {}).get("data", {})
         reg_id = reg_data.get("id")
         if reg_id is not None:
-            entities.append(BaillclimModeSelect(coordinator, reg_id))
+            entities.append(BaillclimModeSelect(coordinator, reg_id, entry))
         else:
             _LOGGER.warning("❌ Aucune 'id' trouvée dans reg.data : %s", reg)
 
@@ -46,9 +45,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class BaillclimModeSelect(CoordinatorEntity, SelectEntity):
-    def __init__(self, coordinator: DataUpdateCoordinator, regulation_id: int):
+    def __init__(self, coordinator: DataUpdateCoordinator, regulation_id: int, config_entry: ConfigEntry):
         super().__init__(coordinator)
         self._regulation_id = regulation_id
+        self._config_entry = config_entry
         self._attr_name = f"Mode Climatisation {regulation_id}"
         self._attr_unique_id = f"baillclim_mode_clim_{regulation_id}"
         self._attr_options = list(MODES.keys())
@@ -58,7 +58,7 @@ class BaillclimModeSelect(CoordinatorEntity, SelectEntity):
         try:
             data = self.coordinator.data.get("data", {})
             for reg in data.get("regulations", []):
-                reg_data = reg.get("data", {})
+                reg_data = reg.get("data", {}).get("data", {})
                 if reg_data.get("id") == self._regulation_id:
                     uc_mode = reg_data.get("uc_mode")
                     return {v: k for k, v in MODES.items()}.get(uc_mode)
@@ -71,20 +71,20 @@ class BaillclimModeSelect(CoordinatorEntity, SelectEntity):
             _LOGGER.warning("❌ Mode sélectionné invalide : %s", option)
             return
 
-        await self.hass.async_add_executor_job(self._set_mode_sync, option)
-        await self.coordinator.async_request_refresh()
-
-    def _set_mode_sync(self, option: str):
         try:
-            SessionManager.initialize(
-                self.coordinator.config_entry.data["email"],
-                self.coordinator.config_entry.data["password"],
+            await SessionManager.async_initialize(
+                self.hass,
+                self._config_entry.data["email"],
+                self._config_entry.data["password"],
                 reg_id=self._regulation_id
             )
-            session = SessionManager.get_session()
+            session = await SessionManager.async_get_session(self.hass)
             url = f"https://www.baillconnect.com/api-client/regulations/{self._regulation_id}"
             payload = {"uc_mode": MODES[option]}
-            response = session.post(url, json=payload, timeout=10)
+
+            response = await self.hass.async_add_executor_job(
+                lambda: session.post(url, json=payload, timeout=10)
+            )
 
             if response.status_code == 200:
                 _LOGGER.info("✅ Mode changé (reg_id=%s) → %s", self._regulation_id, option)
@@ -92,7 +92,9 @@ class BaillclimModeSelect(CoordinatorEntity, SelectEntity):
                 _LOGGER.warning("❌ Échec changement mode (reg_id=%s) : %s", self._regulation_id, response.text)
 
         except Exception as e:
-            _LOGGER.warning("⚠️ _set_mode_sync error (reg_id=%s): %s", self._regulation_id, e)
+            _LOGGER.warning("⚠️ async_select_option error (reg_id=%s): %s", self._regulation_id, e)
+
+        await self.coordinator.async_request_refresh()
 
     @property
     def device_info(self):

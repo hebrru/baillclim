@@ -12,29 +12,29 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
     coordinator: DataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
-    coordinator.config_entry = entry
 
     if not coordinator.data:
         _LOGGER.error("❌ Aucune donnée récupérée pour initialiser les capteurs.")
         return
 
-    entities = [DebugBaillclimSensor(coordinator)]
     data = coordinator.data.get("data", {})
+    if not isinstance(data, dict):
+        _LOGGER.warning("❌ Format de données inattendu dans le coordinator : %s", data)
+        return
 
-    if isinstance(data, dict):
-        for reg in data.get("regulations", []):
-            reg_data = reg.get("data", {})
-            reg_id = reg_data.get("id")
-            if reg_id is None:
-                continue
+    entities = [DebugBaillclimSensor(coordinator)]
 
-            for th in reg_data.get("thermostats", []):
-                tid = th.get("id")
-                name = th.get("name", f"Thermostat {tid}" if tid else "Inconnu").strip()
-                if tid is not None:
-                    entities.append(ThermostatTemperatureSensor(coordinator, reg_id, tid, name))
-    else:
-        _LOGGER.warning("❌ Aucune régulation détectée dans les données : %s", data)
+    for reg in data.get("regulations", []):
+        reg_data = reg.get("data", {}).get("data", {})
+        reg_id = reg_data.get("id")
+        if reg_id is None:
+            continue
+
+        for th in reg_data.get("thermostats", []):
+            tid = th.get("id")
+            name = th.get("name", f"Thermostat {tid}" if tid else "Inconnu").strip()
+            if tid is not None:
+                entities.append(ThermostatTemperatureSensor(coordinator, reg_id, tid, name))
 
     async_add_entities(entities)
 
@@ -70,7 +70,7 @@ class ThermostatTemperatureSensor(CoordinatorEntity, Entity):
         try:
             data = self.coordinator.data.get("data", {})
             for reg in data.get("regulations", []):
-                reg_data = reg.get("data", {})
+                reg_data = reg.get("data", {}).get("data", {})
                 if reg_data.get("id") == self._reg_id:
                     for th in reg_data.get("thermostats", []):
                         if th.get("id") == self._tid:

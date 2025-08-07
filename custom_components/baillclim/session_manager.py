@@ -1,9 +1,8 @@
-import logging
 import re
+import logging
 import requests
 import urllib.parse
 from datetime import datetime, timedelta
-import time
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -19,7 +18,7 @@ class SessionManager:
     _cookie_ttl = timedelta(minutes=8)
 
     @classmethod
-    def initialize(cls, email: str, password: str, reg_id: int = 0, timeout: int = 15):
+    async def async_initialize(cls, hass, email: str, password: str, reg_id: int = 0, timeout: int = 15):
         cls._email = email
         cls._password = password
         cls._timeout = timeout
@@ -30,10 +29,10 @@ class SessionManager:
 
         now = datetime.now()
         if cls._last_cookie_refresh is None or (now - cls._last_cookie_refresh > cls._cookie_ttl):
-            cls._refresh_cookie()
+            await hass.async_add_executor_job(cls._refresh_cookie)
 
         if reg_id:
-            cls._initialize_for_regulation(reg_id)
+            await hass.async_add_executor_job(cls._initialize_for_regulation, reg_id)
 
     @classmethod
     def _refresh_cookie(cls):
@@ -89,7 +88,7 @@ class SessionManager:
         })
 
     @classmethod
-    def get_session(cls) -> requests.Session:
+    async def async_get_session(cls, hass) -> requests.Session:
         if cls._session is None:
             raise Exception("❌ Session non initialisée.")
         return cls._session
