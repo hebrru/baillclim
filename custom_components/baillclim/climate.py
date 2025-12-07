@@ -65,11 +65,33 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
 
     @property
     def target_temperature_low(self):
-        return self._thermostat_data.get("setpoint_hot_t1")
+        """
+        Consigne de chauffage affichée dans HA.
+
+        - En mode CONFORT (t1_t2 = 1) → setpoint_hot_t1
+        - En mode ECO     (t1_t2 = 2) → setpoint_hot_t2
+        """
+        th = self._thermostat_data
+        t1_t2 = th.get("t1_t2", 1)
+
+        if t1_t2 == 2:
+            return th.get("setpoint_hot_t2")
+        return th.get("setpoint_hot_t1")
 
     @property
     def target_temperature_high(self):
-        return self._thermostat_data.get("setpoint_cool_t1")
+        """
+        Consigne de froid affichée dans HA.
+
+        - En mode CONFORT (t1_t2 = 1) → setpoint_cool_t1
+        - En mode ECO     (t1_t2 = 2) → setpoint_cool_t2
+        """
+        th = self._thermostat_data
+        t1_t2 = th.get("t1_t2", 1)
+
+        if t1_t2 == 2:
+            return th.get("setpoint_cool_t2")
+        return th.get("setpoint_cool_t1")
 
     @property
     def current_temperature(self):
@@ -161,16 +183,31 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
         await self.coordinator.async_request_refresh()
 
     async def async_set_temperature(self, **kwargs):
+        """
+        Change les consignes en fonction du mode actif :
+
+        - si t1_t2 = 1 (CONFORT) → écrit dans T1
+        - si t1_t2 = 2 (ECO)     → écrit dans T2
+        """
+        th = self._thermostat_data
+        t1_t2 = th.get("t1_t2", 1)
+
+        # Chauffage
         if "target_temp_low" in kwargs:
+            key = "setpoint_hot_t2" if t1_t2 == 2 else "setpoint_hot_t1"
             await self._set_api_value(
-                f"thermostats.{self._id}.setpoint_hot_t1",
+                f"thermostats.{self._id}.{key}",
                 kwargs["target_temp_low"],
             )
+
+        # Froid
         if "target_temp_high" in kwargs:
+            key = "setpoint_cool_t2" if t1_t2 == 2 else "setpoint_cool_t1"
             await self._set_api_value(
-                f"thermostats.{self._id}.setpoint_cool_t1",
+                f"thermostats.{self._id}.{key}",
                 kwargs["target_temp_high"],
             )
+
         await self.coordinator.async_request_refresh()
 
     async def _set_api_value(self, key, value):
