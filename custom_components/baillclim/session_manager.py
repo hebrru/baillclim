@@ -68,24 +68,28 @@ class SessionManager:
         regulations_url = f"https://www.baillconnect.com/client/regulations/{reg_id}"
         page = cls._session.get(regulations_url, timeout=cls._timeout)
 
-        csrf_token = re.search(r'<meta name="csrf-token" content="([^"]+)">', page.text)
+        csrf_token = re.search(r'<meta name="csrf-token"\s+content="([^"]+)">', page.text)
         xsrf_cookie = cls._session.cookies.get("XSRF-TOKEN")
 
-        if not csrf_token or not xsrf_cookie:
-            raise Exception("❌ Token CSRF/XSRF manquant.")
+        if not csrf_token:
+            raise Exception("❌ Token CSRF manquant.")
 
         cls._csrf_token = csrf_token.group(1)
-        cls._xsrf_token = urllib.parse.unquote(xsrf_cookie)
+        cls._xsrf_token = urllib.parse.unquote(xsrf_cookie) if xsrf_cookie else None
 
-        cls._session.headers.update({
+        headers = {
             "Content-Type": "application/json;charset=UTF-8",
             "Accept": "application/json, text/plain, */*",
             "X-CSRF-TOKEN": cls._csrf_token,
-            "X-XSRF-TOKEN": cls._xsrf_token,
             "X-Requested-With": "XMLHttpRequest",
             "Origin": "https://www.baillconnect.com",
             "Referer": regulations_url
-        })
+        }
+        if cls._xsrf_token:
+            headers["X-XSRF-TOKEN"] = cls._xsrf_token
+
+        cls._session.headers.update(headers)
+        return page.text
 
     @classmethod
     async def async_get_session(cls, hass) -> requests.Session:
