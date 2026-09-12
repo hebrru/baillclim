@@ -1,5 +1,11 @@
 # 🌡️ BaillClim – Intégration BaillConnect pour Home Assistant
 
+<p align="left"><img src="custom_components/baillclim/brand/icon@2x.png" alt="Icône indépendante BaillClim" width="96" height="96"></p>
+
+> **Projet communautaire indépendant, non affilié au fabricant.** Cette icône est une création originale pour cette intégration, pas un logo officiel. Les noms des fabricants désignent uniquement les appareils compatibles.
+
+[Sources et variantes du logo](custom_components/baillclim/brand/) · [Publication 6.2.3](https://github.com/hebrru/baillclim/releases/tag/v6.2.3)
+
 ![HACS](https://img.shields.io/badge/HACS-CUSTOM-orange?style=for-the-badge)
 ![RELEASE](https://img.shields.io/badge/RELEASE-5.x-blue?style=for-the-badge)
 [![Buy Me A Coffee](https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png)](https://www.buymeacoffee.com/herbru01d)
