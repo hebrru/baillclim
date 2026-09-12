@@ -9,5 +9,5 @@
   "issue_tracker": "https://github.com/hebrru/baillclim/issues",
   "loggers": ["custom_components.baillclim"],
   "requirements": [],
-  "version": "6.2.2"
+  "version": "6.2.3"
 }
