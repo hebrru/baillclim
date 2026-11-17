@@ -21,8 +21,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     password = entry.data["password"]
 
     # 🔁 Options : priorité aux options (modifiables), sinon fallback sur data
-    update_seconds = entry.options.get("update_interval", entry.data.get("update_interval", 60))
-    timeout_seconds = entry.options.get("timeout", entry.data.get("timeout", 15))
+    options = entry.options
+    update_seconds = options.get("update_interval", entry.data.get("update_interval", 60))
+    timeout_seconds = options.get("timeout", entry.data.get("timeout", 15))
 
     coordinator = create_baillclim_coordinator(
         hass=hass,
@@ -64,6 +65,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "number",
         "select",
     ])
+
+    async def async_options_updated(hass: HomeAssistant, updated_entry: ConfigEntry) -> None:
+        """Reload BaillClim after changed options have been stored."""
+        if updated_entry.options != options:
+            await hass.config_entries.async_reload(updated_entry.entry_id)
+
+    entry.async_on_unload(entry.add_update_listener(async_options_updated))
 
     return True
 
