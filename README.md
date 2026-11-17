@@ -49,6 +49,15 @@ Permet d’activer/désactiver une zone programmée :
 Capteur spécial contenant **l'intégralité des données JSON brutes** retournées par l'API.  
 Utile pour le debug ou l’extraction avancée.
 
+Ce capteur est **désactivé par défaut** (catégorie *Diagnostic*) et son contenu **n'est pas enregistré dans l'historique**, pour ne pas alourdir la base de données (~7 Ko à chaque relevé).
+
+Pour le réactiver lors d'une phase de debug :
+1. **Paramètres → Appareils et services → Entités**, recherchez « Debug BaillConnect » ;
+2. les entités désactivées étant masquées, ouvrez les **filtres** et affichez les entités **désactivées** ;
+3. cliquez sur **Debug BaillConnect Data** → ⚙️ → **Activé** → **Mettre à jour**. Home Assistant recharge l'intégration au bout de 30 secondes environ.
+
+Les données sont alors visibles dans **Outils de développement → États** (attribut `data`). Pensez à le désactiver à nouveau une fois le debug terminé.
+
 ---
 
 ## 🧠 Points forts

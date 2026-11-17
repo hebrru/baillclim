@@ -1,4 +1,5 @@
 import logging
+from homeassistant.const import EntityCategory
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 from homeassistant.core import HomeAssistant
@@ -41,11 +42,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class DebugBaillclimSensor(CoordinatorEntity, Entity):
+    # Le JSON brut (~7 Ko, change à chaque relevé) n'est pas enregistré dans l'historique
+    _unrecorded_attributes = frozenset({"data"})
+
     def __init__(self, coordinator):
         super().__init__(coordinator)
         self._attr_name = "Debug BaillConnect Data"
         self._attr_unique_id = "baillclim_debug_data"
         self._attr_icon = "mdi:code-json"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        # Désactivé par défaut pour les nouvelles installations (voir README)
+        self._attr_entity_registry_enabled_default = False
 
     @property
     def state(self):
