@@ -35,4 +35,4 @@ class BaillClimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     def async_get_options_flow(config_entry):
         from .options_flow import BaillClimOptionsFlowHandler
-        return BaillClimOptionsFlowHandler(config_entry)
+        return BaillClimOptionsFlowHandler()
