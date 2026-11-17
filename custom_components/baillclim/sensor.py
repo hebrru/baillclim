@@ -1,4 +1,6 @@
 import logging
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
+from homeassistant.const import UnitOfTemperature
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 from homeassistant.core import HomeAssistant
@@ -56,18 +58,20 @@ class DebugBaillclimSensor(CoordinatorEntity, Entity):
         return self.coordinator.data or {}
 
 
-class ThermostatTemperatureSensor(CoordinatorEntity, Entity):
+class ThermostatTemperatureSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, reg_id, tid, name):
         super().__init__(coordinator)
         self._reg_id = reg_id
         self._tid = tid
         self._attr_name = f"Température {name}"
         self._attr_unique_id = f"baillclim_temp_{reg_id}_{tid}"
-        self._attr_unit_of_measurement = "°C"
+        self._attr_device_class = SensorDeviceClass.TEMPERATURE
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
         self._attr_icon = "mdi:thermometer"
 
     @property
-    def state(self):
+    def native_value(self):
         try:
             data = self.coordinator.data.get("data", {})
             for reg in data.get("regulations", []):
