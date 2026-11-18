@@ -39,6 +39,7 @@ Contrôle du mode général du système :
 
 ### 🌡️ `sensor.baillclim_temp_*`
 Capteurs de température ambiante pour chaque thermostat, lisibles séparément.
+Les nouvelles mesures enregistrées alimentent les statistiques à long terme de Home Assistant.
 
 ### 💡 `switch.zone_*_active`
 Permet d’activer/désactiver une zone programmée :
@@ -46,8 +47,13 @@ Permet d’activer/désactiver une zone programmée :
 - Inactive = mode `0`
 
 ### 🐞 `sensor.debug_baillconnect_data`
-Capteur spécial contenant **l'intégralité des données JSON brutes** retournées par l'API.  
-Utile pour le debug ou l’extraction avancée.
+Capteur de **diagnostic** qui expose le JSON brut de BaillConnect dans l’attribut `data`. Home Assistant exclut cet attribut de l’historique pour limiter la taille de la base de données.
+
+Le capteur est désactivé par défaut à sa création. Sur une installation existante, Home Assistant reprend le réglage enregistré pour cette entité.
+
+1. Dans **Paramètres → Appareils et services → Entités**, recherchez **Debug BaillConnect Data** et affichez les entités désactivées dans les filtres.
+2. Ouvrez le capteur et activez-le dans ses paramètres.
+3. Dans l’onglet **États** des outils de Home Assistant, consultez l’attribut `data` de `sensor.debug_baillconnect_data`.
 
 ---
 

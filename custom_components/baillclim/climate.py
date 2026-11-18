@@ -25,7 +25,6 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
         | ClimateEntityFeature.PRESET_MODE
     )
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.AUTO]
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_min_temp = 16.0
     _attr_max_temp = 30.0
 
@@ -64,7 +63,7 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
         return HVACMode.AUTO if self._thermostat_data.get("is_on") else HVACMode.OFF
 
     @property
-    def target_temperature_low(self):
+    def _heating_setpoint(self):
         """
         Consigne de chauffage affichée dans HA.
 
@@ -79,7 +78,7 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
         return th.get("setpoint_hot_t1")
 
     @property
-    def target_temperature_high(self):
+    def _cooling_setpoint(self):
         """
         Consigne de froid affichée dans HA.
 
@@ -94,8 +93,20 @@ class BaillclimClimate(CoordinatorEntity, ClimateEntity):
         return th.get("setpoint_cool_t1")
 
     @property
-    def current_temperature(self):
+    def _room_temperature(self):
         return self._thermostat_data.get("temperature")
+
+    # Home Assistant utilise les propriétés native_* à partir de 2026.11.
+    if hasattr(ClimateEntity, "native_temperature_unit"):
+        _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
+        native_current_temperature = _room_temperature
+        native_target_temperature_low = _heating_setpoint
+        native_target_temperature_high = _cooling_setpoint
+    else:
+        _attr_temperature_unit = UnitOfTemperature.CELSIUS
+        current_temperature = _room_temperature
+        target_temperature_low = _heating_setpoint
+        target_temperature_high = _cooling_setpoint
 
     # ------------------ ECO / CONFORT (presets) ------------------
 

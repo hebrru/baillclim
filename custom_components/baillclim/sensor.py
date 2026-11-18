@@ -1,4 +1,11 @@
 import logging
+
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
+from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 from homeassistant.core import HomeAssistant
@@ -41,6 +48,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class DebugBaillclimSensor(CoordinatorEntity, Entity):
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+    _unrecorded_attributes = frozenset({"data"})
+
     def __init__(self, coordinator):
         super().__init__(coordinator)
         self._attr_name = "Debug BaillConnect Data"
@@ -56,18 +67,21 @@ class DebugBaillclimSensor(CoordinatorEntity, Entity):
         return self.coordinator.data or {}
 
 
-class ThermostatTemperatureSensor(CoordinatorEntity, Entity):
+class ThermostatTemperatureSensor(CoordinatorEntity, SensorEntity):
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+
     def __init__(self, coordinator, reg_id, tid, name):
         super().__init__(coordinator)
         self._reg_id = reg_id
         self._tid = tid
         self._attr_name = f"Température {name}"
         self._attr_unique_id = f"baillclim_temp_{reg_id}_{tid}"
-        self._attr_unit_of_measurement = "°C"
         self._attr_icon = "mdi:thermometer"
 
     @property
-    def state(self):
+    def native_value(self):
         try:
             data = self.coordinator.data.get("data", {})
             for reg in data.get("regulations", []):
